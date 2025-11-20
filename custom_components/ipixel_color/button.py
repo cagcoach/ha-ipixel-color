@@ -105,7 +105,8 @@ class iPIXELUpdateButton(ButtonEntity):
             entity_id = f"text.{self._name.lower().replace(' ', '_')}_display"
             state = self.hass.states.get(entity_id)
             if state and state.state not in ("unknown", "unavailable", ""):
-                return state.state
+                # Process escape sequences (convert \\n to actual newlines)
+                return state.state.replace('\\n', '\n').replace('\\t', '\t')
         except Exception as err:
             _LOGGER.debug("Could not get current text: %s", err)
         return None

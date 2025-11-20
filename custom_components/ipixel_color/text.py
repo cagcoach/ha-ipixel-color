@@ -33,7 +33,7 @@ async def async_setup_entry(
 class iPIXELTextDisplay(TextEntity):
     """Representation of an iPIXEL Color text display."""
 
-    _attr_mode = TextMode.MULTILINE
+    _attr_mode = TextMode.TEXT
     _attr_native_max = 500  # Maximum 500 characters per protocol
 
     def __init__(
@@ -85,8 +85,11 @@ class iPIXELTextDisplay(TextEntity):
     async def async_set_value(self, value: str) -> None:
         """Set the text to display."""
         try:
+            # Process escape sequences (convert \\n to actual newlines)
+            processed_text = value.replace('\\n', '\n').replace('\\t', '\t')
+            
             # Always update the current text value
-            self._current_text = value
+            self._current_text = processed_text
             
             # Check if auto-update is enabled
             auto_update = await self._get_auto_update_setting()
@@ -95,7 +98,7 @@ class iPIXELTextDisplay(TextEntity):
                 return
             
             # Auto-update is enabled, proceed with display update
-            await self._update_display(value)
+            await self._update_display(processed_text)
                 
         except iPIXELConnectionError as err:
             _LOGGER.error("Connection error while displaying text: %s", err)

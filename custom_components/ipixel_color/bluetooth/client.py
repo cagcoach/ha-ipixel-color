@@ -8,6 +8,12 @@ from typing import Any, Callable
 from bleak import BleakClient
 from bleak.exc import BleakError
 
+try:
+    from bleak_retry_connector import establish_connection
+    HAS_RETRY_CONNECTOR = True
+except ImportError:
+    HAS_RETRY_CONNECTOR = False
+
 from ..const import WRITE_UUID, NOTIFY_UUID, CONNECTION_TIMEOUT
 from ..exceptions import iPIXELConnectionError, iPIXELTimeoutError
 
@@ -23,6 +29,11 @@ class BluetoothClient:
         self._client: BleakClient | None = None
         self._connected = False
         self._notification_handler: Callable | None = None
+
+    def _disconnected_callback(self, client: BleakClient) -> None:
+        """Called when device disconnects."""
+        _LOGGER.warning("iPIXEL device %s disconnected", self._address)
+        self._connected = False
         
     async def connect(self, notification_handler: Callable[[Any, bytearray], None]) -> bool:
         """Connect to the iPIXEL device.
@@ -36,10 +47,21 @@ class BluetoothClient:
         _LOGGER.debug("Connecting to iPIXEL device at %s", self._address)
         
         try:
-            self._client = BleakClient(self._address)
-            await asyncio.wait_for(
-                self._client.connect(), timeout=CONNECTION_TIMEOUT
-            )
+            if HAS_RETRY_CONNECTOR:
+                # Use bleak-retry-connector for more reliable connections
+                _LOGGER.debug("Using bleak-retry-connector for reliable connection")
+                self._client = await establish_connection(
+                    BleakClient, self._address, self._address,
+                    disconnected_callback=self._disconnected_callback
+                )
+            else:
+                # Fallback to regular BleakClient
+                _LOGGER.debug("Using standard BleakClient (consider installing bleak-retry-connector)")
+                self._client = BleakClient(self._address)
+                await asyncio.wait_for(
+                    self._client.connect(), timeout=CONNECTION_TIMEOUT
+                )
+            
             self._connected = True
             
             # Store and enable notifications
