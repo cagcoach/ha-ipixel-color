@@ -169,6 +169,9 @@ test_*.py
 *_test.py
 test_output/
 .pytest_cache/
+test_venv/
+homeassistant/
+test_font_rendering.py
 
 # Local development
 .devcontainer/
