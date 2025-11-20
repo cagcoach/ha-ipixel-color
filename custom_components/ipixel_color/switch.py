@@ -30,6 +30,7 @@ async def async_setup_entry(
     async_add_entities([
         iPIXELSwitch(api, entry, address, name),
         iPIXELAntialiasingSwitch(api, entry, address, name),
+        iPIXELAutoUpdateSwitch(api, entry, address, name),
     ])
 
 
@@ -150,6 +151,7 @@ class iPIXELAntialiasingSwitch(SwitchEntity):
         self._name = name
         self._attr_name = f"{name} Antialiasing"
         self._attr_unique_id = f"{address}_antialiasing"
+        self._attr_entity_description = "Enable text antialiasing for smooth text (disable for sharp pixels)"
         self._is_on = True  # Default to antialiasing enabled
 
         # Device info for grouping in device registry
@@ -180,3 +182,55 @@ class iPIXELAntialiasingSwitch(SwitchEntity):
         """Disable antialiasing."""
         self._is_on = False
         _LOGGER.debug("Antialiasing disabled")
+
+
+class iPIXELAutoUpdateSwitch(SwitchEntity):
+    """Representation of an iPIXEL Color auto-update setting."""
+
+    _attr_icon = "mdi:auto-fix"
+
+    def __init__(
+        self, 
+        api: iPIXELAPI, 
+        entry: ConfigEntry, 
+        address: str, 
+        name: str
+    ) -> None:
+        """Initialize the auto-update switch."""
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = f"{name} Auto Update"
+        self._attr_unique_id = f"{address}_auto_update"
+        self._attr_entity_description = "Automatically update display when text or settings change"
+        self._is_on = False  # Default to manual updates only
+
+        # Device info for grouping in device registry
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="iPIXEL",
+            model="LED Matrix Display",
+            sw_version="1.0",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if auto-update is enabled."""
+        return self._is_on
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return True
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable auto-update."""
+        self._is_on = True
+        _LOGGER.debug("Auto-update enabled - display will update automatically on changes")
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable auto-update."""
+        self._is_on = False
+        _LOGGER.debug("Auto-update disabled - use update button for manual updates")

@@ -36,10 +36,11 @@ class iPIXELFontSize(NumberEntity):
     """Representation of an iPIXEL Color font size setting."""
 
     _attr_mode = NumberMode.BOX
-    _attr_native_min_value = 4  # Minimum font size
+    _attr_native_min_value = 0  # 0 = auto-sizing
     _attr_native_max_value = 64  # Maximum font size for 32x32 display
     _attr_native_step = 1
     _attr_icon = "mdi:format-size"
+    _attr_entity_category = None
 
     def __init__(
         self, 
@@ -55,7 +56,8 @@ class iPIXELFontSize(NumberEntity):
         self._name = name
         self._attr_name = f"{name} Font Size"
         self._attr_unique_id = f"{address}_font_size"
-        self._attr_native_value = None  # None means auto-sizing
+        self._attr_native_value = 0  # 0 means auto-sizing
+        self._attr_entity_description = "Font size in pixels (0 = auto-sizing to fit display)"
         
         # Device info for grouping in device registry
         self._attr_device_info = DeviceInfo(
@@ -75,7 +77,10 @@ class iPIXELFontSize(NumberEntity):
         """Set the font size."""
         if self._attr_native_min_value <= value <= self._attr_native_max_value:
             self._attr_native_value = int(value)
-            _LOGGER.debug("Font size changed to: %d", int(value))
+            if int(value) == 0:
+                _LOGGER.debug("Font size changed to: auto-sizing")
+            else:
+                _LOGGER.debug("Font size changed to: %d pixels", int(value))
             # Note: The actual font size will be used when text is displayed
         else:
             _LOGGER.error("Invalid font size: %f (min: %f, max: %f)", 

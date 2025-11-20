@@ -85,30 +85,44 @@ class iPIXELTextDisplay(TextEntity):
     async def async_set_value(self, value: str) -> None:
         """Set the text to display."""
         try:
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device before displaying text")
-                await self._api.connect()
+            # Always update the current text value
+            self._current_text = value
             
-            # Get font settings from other entities
-            font_name = await self._get_font_setting()
-            font_size = await self._get_font_size_setting()
-            antialias = await self._get_antialiasing_setting()
+            # Check if auto-update is enabled
+            auto_update = await self._get_auto_update_setting()
+            if not auto_update:
+                _LOGGER.debug("Auto-update disabled - text stored but not sent to display. Use update button to refresh.")
+                return
             
-            # Send text to display with settings
-            success = await self._api.display_text(value, antialias, font_size, font_name)
-            
-            if success:
-                self._current_text = value
-                _LOGGER.debug("Successfully displayed text: %s (font: %s, size: %s, antialias: %s)", 
-                            value, font_name or "Default", font_size or "Auto", antialias)
-            else:
-                _LOGGER.error("Failed to display text on iPIXEL")
+            # Auto-update is enabled, proceed with display update
+            await self._update_display(value)
                 
         except iPIXELConnectionError as err:
             _LOGGER.error("Connection error while displaying text: %s", err)
             # Don't set unavailable to allow retry
         except Exception as err:
             _LOGGER.error("Unexpected error while displaying text: %s", err)
+
+    async def _update_display(self, text: str) -> None:
+        """Update the physical display with text and current settings."""
+        if not self._api.is_connected:
+            _LOGGER.debug("Reconnecting to device before displaying text")
+            await self._api.connect()
+        
+        # Get font settings from other entities
+        font_name = await self._get_font_setting()
+        font_size = await self._get_font_size_setting()
+        antialias = await self._get_antialiasing_setting()
+        
+        # Send text to display with settings
+        success = await self._api.display_text(text, antialias, font_size, font_name)
+        
+        if success:
+            _LOGGER.debug("Successfully displayed text: %s (font: %s, size: %s, antialias: %s)", 
+                        text, font_name or "Default", 
+                        f"{font_size}px" if font_size else "Auto", antialias)
+        else:
+            _LOGGER.error("Failed to display text on iPIXEL")
 
     async def _get_font_setting(self) -> str | None:
         """Get the current font setting from the font select entity."""
@@ -129,7 +143,9 @@ class iPIXELTextDisplay(TextEntity):
             entity_id = f"number.{self._name.lower().replace(' ', '_')}_font_size"
             state = self.hass.states.get(entity_id)
             if state and state.state not in ("unknown", "unavailable", ""):
-                return int(float(state.state))
+                size_value = int(float(state.state))
+                # Return None for 0 (auto-sizing), otherwise return the size
+                return None if size_value == 0 else size_value
         except Exception as err:
             _LOGGER.debug("Could not get font size setting: %s", err)
         return None
@@ -145,6 +161,18 @@ class iPIXELTextDisplay(TextEntity):
         except Exception as err:
             _LOGGER.debug("Could not get antialiasing setting: %s", err)
         return True  # Default to antialiasing enabled
+
+    async def _get_auto_update_setting(self) -> bool:
+        """Get the current auto-update setting from the switch entity."""
+        try:
+            # Get the auto-update switch entity
+            entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
+            state = self.hass.states.get(entity_id)
+            if state:
+                return state.state == "on"
+        except Exception as err:
+            _LOGGER.debug("Could not get auto-update setting: %s", err)
+        return False  # Default to manual updates only
 
     async def async_update(self) -> None:
         """Update the entity state."""

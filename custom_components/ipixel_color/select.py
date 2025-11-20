@@ -30,7 +30,7 @@ async def async_setup_entry(
     api = hass.data[DOMAIN][entry.entry_id]
     
     async_add_entities([
-        iPIXELFontSelect(api, entry, address, name),
+        iPIXELFontSelect(hass, api, entry, address, name),
     ])
 
 
@@ -39,18 +39,21 @@ class iPIXELFontSelect(SelectEntity):
 
     def __init__(
         self, 
+        hass: HomeAssistant,
         api: iPIXELAPI, 
         entry: ConfigEntry, 
         address: str, 
         name: str
     ) -> None:
         """Initialize the font select."""
+        self.hass = hass
         self._api = api
         self._entry = entry
         self._address = address
         self._name = name
         self._attr_name = f"{name} Font"
         self._attr_unique_id = f"{address}_font_select"
+        self._attr_entity_description = "Select font for text display (loads from fonts/ folder)"
         
         # Get available fonts from fonts/ folder
         self._attr_options = self._get_available_fonts()
@@ -89,9 +92,34 @@ class iPIXELFontSelect(SelectEntity):
         if option in self._attr_options:
             self._attr_current_option = option
             _LOGGER.debug("Font changed to: %s", option)
-            # Note: The actual font will be used when text is displayed
+            
+            # Trigger display update if auto-update is enabled
+            await self._trigger_auto_update()
         else:
             _LOGGER.error("Invalid font option: %s", option)
+
+    async def _trigger_auto_update(self) -> None:
+        """Trigger display update if auto-update is enabled."""
+        try:
+            # Check auto-update setting
+            auto_update_entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
+            auto_update_state = self.hass.states.get(auto_update_entity_id)
+            
+            if auto_update_state and auto_update_state.state == "on":
+                # Get text entity and current text
+                text_entity_id = f"text.{self._name.lower().replace(' ', '_')}_display"
+                text_state = self.hass.states.get(text_entity_id)
+                
+                if text_state and text_state.state not in ("unknown", "unavailable", ""):
+                    # Trigger update button to refresh display
+                    update_button_entity_id = f"button.{self._name.lower().replace(' ', '_')}_update_display"
+                    await self.hass.services.async_call(
+                        "button", "press", 
+                        {"entity_id": update_button_entity_id}
+                    )
+                    _LOGGER.debug("Auto-update triggered display refresh due to font change")
+        except Exception as err:
+            _LOGGER.debug("Could not trigger auto-update: %s", err)
 
     @property
     def available(self) -> bool:
