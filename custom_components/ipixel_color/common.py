@@ -77,7 +77,7 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
         
         if success:
             _LOGGER.info("Display update successful: %s (font: %s, size: %s, antialias: %s, spacing: %spx)", 
-                       processed_text, font_name or "Default", 
+                       processed_text, font_name or "OpenSans-Light.ttf", 
                        f"{font_size:.1f}px" if font_size else "Auto", antialias, line_spacing)
         else:
             _LOGGER.error("Display update failed")

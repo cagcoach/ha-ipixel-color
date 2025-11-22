@@ -30,6 +30,26 @@ def make_default_mode_command() -> bytes:
     return make_command_payload(0x8003, bytes())
 
 
+def make_brightness_command(brightness: int) -> bytes:
+    """Build brightness control command.
+    
+    Command 0x8004 from ipixel-ctrl set_brightness.py
+    
+    Args:
+        brightness: Brightness level from 1 to 100
+        
+    Returns:
+        Command bytes for brightness control
+        
+    Raises:
+        ValueError: If brightness is not in valid range (1-100)
+    """
+    if brightness < 1 or brightness > 100:
+        raise ValueError("Brightness must be between 1 and 100")
+    
+    return make_command_payload(0x8004, bytes([brightness]))
+
+
 def make_png_command(png_data: bytes, buffer_number: int = 1) -> bytes:
     """Build PNG display command.
     

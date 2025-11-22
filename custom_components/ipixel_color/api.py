@@ -12,6 +12,7 @@ from .device.commands import (
     make_diy_mode_command,
     make_default_mode_command,
     make_png_command,
+    make_brightness_command,
 )
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
@@ -48,6 +49,32 @@ class iPIXELAPI:
             self._power_state = on
             _LOGGER.debug("Power set to %s", "ON" if on else "OFF")
         return success
+    
+    async def set_brightness(self, brightness: int) -> bool:
+        """Set device brightness level.
+        
+        Args:
+            brightness: Brightness level from 1 to 100
+            
+        Returns:
+            True if command was sent successfully
+        """
+        try:
+            command = make_brightness_command(brightness)
+            success = await self._bluetooth.send_command(command)
+            
+            if success:
+                _LOGGER.debug("Brightness set to %d", brightness)
+            else:
+                _LOGGER.error("Failed to set brightness to %d", brightness)
+            return success
+            
+        except ValueError as err:
+            _LOGGER.error("Invalid brightness value: %s", err)
+            return False
+        except Exception as err:
+            _LOGGER.error("Error setting brightness: %s", err)
+            return False
     
     async def get_device_info(self) -> dict[str, Any] | None:
         """Query device information and store it."""
