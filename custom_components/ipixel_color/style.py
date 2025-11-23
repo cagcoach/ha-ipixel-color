@@ -103,23 +103,23 @@ class iPIXELStyleEntity(SensorEntity, RestoreEntity):
         self._antialias = True
         self._line_spacing = 0
         
-        # Style presets
+        # Style presets with optimized font sizes for pixel fonts
         self._presets = {
             "default": {
                 "font": "OpenSans-Light.ttf",
-                "font_size": 0,
+                "font_size": 0,  # Auto-sizing
                 "antialias": True,
                 "line_spacing": 0
             },
             "large": {
                 "font": "7x5.ttf", 
-                "font_size": 14,
+                "font_size": 8,  # Optimal for 7x5 font
                 "antialias": False,
                 "line_spacing": 2
             },
             "pixel": {
                 "font": "5x5.ttf",
-                "font_size": 10,
+                "font_size": 10,  # Optimal for 5x5 font
                 "antialias": False,
                 "line_spacing": 1
             },
@@ -130,8 +130,8 @@ class iPIXELStyleEntity(SensorEntity, RestoreEntity):
                 "line_spacing": 3
             },
             "compact": {
-                "font": "3x5.otf",
-                "font_size": 8,
+                "font": "3x5-de.ttf",
+                "font_size": 6,  # Optimal for 3x5 font
                 "antialias": False,
                 "line_spacing": 0
             }
