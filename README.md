@@ -23,14 +23,18 @@ A Home Assistant custom integration for iPIXEL Color LED matrix displays via Blu
 Once configured, you'll get these entities:
 
 - `text.{device}_display` - Enter text with templates and `\n` for newlines
-- `select.{device}_font` - Choose from available fonts
-- `number.{device}_font_size` - Font size (0=auto, supports decimals like 12.5)
-- `number.{device}_line_spacing` - Spacing between lines (0-20px)
+- `sensor.{device}_style` - **Unified style control** (font, size, antialiasing, spacing)
 - `number.{device}_brightness` - Display brightness level (1-100)
-- `switch.{device}_antialiasing` - Smooth vs sharp text
 - `switch.{device}_auto_update` - Auto-update on changes
 - `button.{device}_update_display` - Manual refresh
 - `switch.{device}_power` - Turn display on/off
+
+### Style Entity Features
+
+The new unified `style` entity combines all text formatting options:
+- **Attributes**: font, font_size, antialias, line_spacing
+- **Presets**: default, large, pixel, smooth, compact
+- **Services**: `ipixel_color.apply_style` and `ipixel_color.apply_style_preset`
 
 ## Template Examples
 
@@ -43,9 +47,33 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 ## Quick Start
 
 1. Set text: `"Hello\nWorld"`
-2. Choose font and size (or use auto-sizing)
+2. Apply a style preset or customize via the style entity
 3. Toggle auto-update ON or use manual update button
 4. Templates update automatically with sensor changes
+
+### Using Style Presets
+
+```yaml
+service: ipixel_color.apply_style_preset
+target:
+  entity_id: sensor.ipixel_style
+data:
+  preset: pixel  # Options: default, large, pixel, smooth, compact
+```
+
+### Custom Style
+
+```yaml
+service: ipixel_color.apply_style
+target:
+  entity_id: sensor.ipixel_style
+data:
+  style:
+    font: "5x5.ttf"
+    font_size: 12
+    antialias: false
+    line_spacing: 2
+```
 
 ## Font Management
 

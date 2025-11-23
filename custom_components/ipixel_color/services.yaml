@@ -52,3 +52,40 @@ display_text:
       default: [0, 0, 0]
       selector:
         color_rgb:
+
+apply_style:
+  name: Apply Style
+  description: Apply custom text style settings to the display
+  target:
+    entity:
+      integration: ipixel_color
+      domain: sensor
+  fields:
+    style:
+      name: Style Configuration
+      description: Style settings as a dictionary
+      required: true
+      example: {"font": "5x5.ttf", "font_size": 12, "antialias": false, "line_spacing": 2}
+      selector:
+        object:
+
+apply_style_preset:
+  name: Apply Style Preset
+  description: Apply a predefined style preset
+  target:
+    entity:
+      integration: ipixel_color
+      domain: sensor
+  fields:
+    preset:
+      name: Preset Name
+      description: Name of the style preset to apply
+      required: true
+      selector:
+        select:
+          options:
+            - default
+            - large
+            - pixel
+            - smooth
+            - compact

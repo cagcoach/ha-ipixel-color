@@ -57,11 +57,23 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
                 return False
             text = text_state.state
         
-        # Get all current settings
-        font_name = await _get_entity_setting(hass, device_name, "select", "font")
-        font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float)
-        line_spacing = await _get_entity_setting(hass, device_name, "number", "line_spacing", int)
-        antialias = await _get_entity_setting(hass, device_name, "switch", "antialiasing", bool)
+        # Get style settings from the unified style entity
+        style_entity_id = f"sensor.{device_name.lower().replace(' ', '_')}_style"
+        style_state = hass.states.get(style_entity_id)
+        
+        if style_state and style_state.attributes:
+            # Get settings from style entity attributes
+            font_name = style_state.attributes.get("font", "OpenSans-Light.ttf")
+            font_size = style_state.attributes.get("font_size", 0.0)
+            antialias = style_state.attributes.get("antialias", True)
+            line_spacing = style_state.attributes.get("line_spacing", 0)
+        else:
+            # Fallback to defaults if style entity not available
+            font_name = "OpenSans-Light.ttf"
+            font_size = None
+            antialias = True
+            line_spacing = 0
+            _LOGGER.warning("Style entity not found, using default settings")
         
         # Connect if needed
         if not api.is_connected:

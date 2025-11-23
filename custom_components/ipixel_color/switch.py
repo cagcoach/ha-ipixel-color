@@ -28,9 +28,9 @@ async def async_setup_entry(
     
     api = hass.data[DOMAIN][entry.entry_id]
     
+    # Antialiasing is now part of the style entity
     async_add_entities([
         iPIXELSwitch(api, entry, address, name),
-        iPIXELAntialiasingSwitch(api, entry, address, name),
         iPIXELAutoUpdateSwitch(api, entry, address, name),
     ])
 

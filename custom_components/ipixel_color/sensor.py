@@ -71,6 +71,11 @@ async def async_setup_entry(
     for description in SENSOR_DESCRIPTIONS:
         sensors.append(iPIXELSensor(api, entry, address, name, description))
     
+    # Also set up the style entity
+    from .style import iPIXELStyleEntity
+    style_entity = iPIXELStyleEntity(hass, api, entry, address, name)
+    sensors.append(style_entity)
+    
     async_add_entities(sensors)
 
 
