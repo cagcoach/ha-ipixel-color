@@ -89,3 +89,57 @@ apply_style_preset:
             - pixel
             - smooth
             - compact
+
+set_style:
+  name: Set Style
+  description: Set style parameters like a light entity (font, size, antialias, spacing)
+  target:
+    entity:
+      integration: ipixel_color
+      domain: ipixel_color
+  fields:
+    font:
+      name: Font
+      description: Font filename from fonts/ folder
+      required: false
+      example: "5x5.ttf"
+      selector:
+        text:
+    font_size:
+      name: Font Size
+      description: Font size in pixels (0 = auto-sizing)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 64
+          step: 0.5
+          mode: box
+    antialias:
+      name: Antialiasing
+      description: Enable text antialiasing for smooth rendering
+      required: false
+      selector:
+        boolean:
+    line_spacing:
+      name: Line Spacing
+      description: Extra spacing between lines in pixels
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 20
+          step: 1
+          mode: slider
+    preset:
+      name: Preset
+      description: Apply a predefined style preset
+      required: false
+      selector:
+        select:
+          options:
+            - default
+            - large
+            - pixel
+            - smooth
+            - compact

@@ -57,23 +57,33 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
                 return False
             text = text_state.state
         
-        # Get style settings from the unified style entity
-        style_entity_id = f"sensor.{device_name.lower().replace(' ', '_')}_style"
+        # Get style settings from the unified style control entity
+        style_entity_id = f"ipixel_color.{device_name.lower().replace(' ', '_')}_style"
         style_state = hass.states.get(style_entity_id)
         
         if style_state and style_state.attributes:
-            # Get settings from style entity attributes
+            # Get settings from style control entity attributes
             font_name = style_state.attributes.get("font", "OpenSans-Light.ttf")
             font_size = style_state.attributes.get("font_size", 0.0)
             antialias = style_state.attributes.get("antialias", True)
             line_spacing = style_state.attributes.get("line_spacing", 0)
         else:
-            # Fallback to defaults if style entity not available
-            font_name = "OpenSans-Light.ttf"
-            font_size = None
-            antialias = True
-            line_spacing = 0
-            _LOGGER.warning("Style entity not found, using default settings")
+            # Fallback to legacy sensor style entity
+            sensor_style_entity_id = f"sensor.{device_name.lower().replace(' ', '_')}_style"
+            sensor_style_state = hass.states.get(sensor_style_entity_id)
+            
+            if sensor_style_state and sensor_style_state.attributes:
+                font_name = sensor_style_state.attributes.get("font", "OpenSans-Light.ttf")
+                font_size = sensor_style_state.attributes.get("font_size", 0.0)
+                antialias = sensor_style_state.attributes.get("antialias", True)
+                line_spacing = sensor_style_state.attributes.get("line_spacing", 0)
+            else:
+                # Fallback to defaults if no style entity available
+                font_name = "OpenSans-Light.ttf"
+                font_size = None
+                antialias = True
+                line_spacing = 0
+                _LOGGER.warning("Style entity not found, using default settings")
         
         # Connect if needed
         if not api.is_connected:

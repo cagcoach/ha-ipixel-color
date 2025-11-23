@@ -23,18 +23,19 @@ A Home Assistant custom integration for iPIXEL Color LED matrix displays via Blu
 Once configured, you'll get these entities:
 
 - `text.{device}_display` - Enter text with templates and `\n` for newlines
-- `sensor.{device}_style` - **Unified style control** (font, size, antialiasing, spacing)
+- `ipixel_color.{device}_style` - **Style Control Entity** (like a light with font, size, etc.)
 - `number.{device}_brightness` - Display brightness level (1-100)
 - `switch.{device}_auto_update` - Auto-update on changes
 - `button.{device}_update_display` - Manual refresh
 - `switch.{device}_power` - Turn display on/off
 
-### Style Entity Features
+### Style Control Features
 
-The new unified `style` entity combines all text formatting options:
-- **Attributes**: font, font_size, antialias, line_spacing
-- **Presets**: default, large, pixel, smooth, compact
-- **Services**: `ipixel_color.apply_style` and `ipixel_color.apply_style_preset`
+The `ipixel_color.{device}_style` entity provides comprehensive text formatting:
+- **UI Controls**: Font dropdown, size slider, antialiasing toggle, spacing controls
+- **Automation Support**: Use `ipixel_color.set_style` service like `light.turn_on`
+- **Presets**: Built-in presets (default, large, pixel, smooth, compact)
+- **Real-time Updates**: Changes apply immediately with auto-update enabled
 
 ## Template Examples
 
@@ -51,28 +52,37 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 3. Toggle auto-update ON or use manual update button
 4. Templates update automatically with sensor changes
 
-### Using Style Presets
+### Style Control (Like Light Entity)
 
+**Set Individual Parameters:**
 ```yaml
-service: ipixel_color.apply_style_preset
+service: ipixel_color.set_style
 target:
-  entity_id: sensor.ipixel_style
+  entity_id: ipixel_color.ipixel_style
+data:
+  font: "5x5.ttf"
+  font_size: 12
+  antialias: false
+  line_spacing: 2
+```
+
+**Apply Preset:**
+```yaml
+service: ipixel_color.set_style
+target:
+  entity_id: ipixel_color.ipixel_style
 data:
   preset: pixel  # Options: default, large, pixel, smooth, compact
 ```
 
-### Custom Style
-
+**Mix Preset with Custom:**
 ```yaml
-service: ipixel_color.apply_style
+service: ipixel_color.set_style
 target:
-  entity_id: sensor.ipixel_style
+  entity_id: ipixel_color.ipixel_style
 data:
-  style:
-    font: "5x5.ttf"
-    font_size: 12
-    antialias: false
-    line_spacing: 2
+  preset: pixel
+  line_spacing: 3  # Override spacing from preset
 ```
 
 ## Font Management
