@@ -80,56 +80,59 @@ class iPIXELAPI:
         """Query device information and store it."""
         if self._device_info is not None:
             return self._device_info
-            
-        try:
-            command = build_device_info_command()
-            
-            # Set up notification response
-            self._device_response = None
-            response_received = asyncio.Event()
-            
-            def response_handler(sender: Any, data: bytearray) -> None:
-                self._device_response = bytes(data)
-                response_received.set()
-            
-            # Enable notifications temporarily
-            await self._bluetooth._client.start_notify(
-                "0000fa03-0000-1000-8000-00805f9b34fb", response_handler
-            )
-            
+
+        for attempt in range(1, 4):
             try:
-                # Send command
-                await self._bluetooth._client.write_gatt_char(
-                    "0000fa02-0000-1000-8000-00805f9b34fb", command
+                command = build_device_info_command()
+
+                # Set up notification response
+                self._device_response = None
+                response_received = asyncio.Event()
+
+                def response_handler(sender: Any, data: bytearray) -> None:
+                    self._device_response = bytes(data)
+                    response_received.set()
+
+                # Enable notifications temporarily
+                await self._bluetooth._client.start_notify(
+                    "0000fa03-0000-1000-8000-00805f9b34fb", response_handler
                 )
-                
-                # Wait for response (5 second timeout)
-                await asyncio.wait_for(response_received.wait(), timeout=5.0)
-                
-                if self._device_response:
-                    self._device_info = parse_device_response(self._device_response)
-                else:
-                    raise Exception("No response received")
-                    
-            finally:
-                await self._bluetooth._client.stop_notify(
-                    "0000fa03-0000-1000-8000-00805f9b34fb"
-                )
-            
-            _LOGGER.info("Device info retrieved: %s", self._device_info)
-            return self._device_info
-            
-        except Exception as err:
-            _LOGGER.error("Failed to get device info: %s", err)
-            # Return default values
-            self._device_info = {
-                "width": 64,
-                "height": 16,
-                "device_type": "Unknown", 
-                "mcu_version": "Unknown",
-                "wifi_version": "Unknown"
-            }
-            return self._device_info
+
+                try:
+                    # Send command
+                    await self._bluetooth._client.write_gatt_char(
+                        "0000fa02-0000-1000-8000-00805f9b34fb", command
+                    )
+
+                    # Wait for response (10 second timeout)
+                    await asyncio.wait_for(response_received.wait(), timeout=10.0)
+
+                    if self._device_response:
+                        self._device_info = parse_device_response(self._device_response)
+                    else:
+                        raise Exception("No response received")
+
+                finally:
+                    await self._bluetooth._client.stop_notify(
+                        "0000fa03-0000-1000-8000-00805f9b34fb"
+                    )
+
+                _LOGGER.info("Device info retrieved: %s", self._device_info)
+                return self._device_info
+
+            except Exception as err:
+                _LOGGER.warning("Failed to get device info (attempt %d/3): %s", attempt, err)
+                if attempt < 3:
+                    await asyncio.sleep(2)
+        # All attempts failed - return default values (don't cache to allow retries)
+        _LOGGER.error("Failed to get device info after 3 attempts")
+        return {
+            "width": 64,
+            "height": 16,
+            "device_type": "Unknown",
+            "mcu_version": "Unknown",
+            "wifi_version": "Unknown"
+        }
     
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0) -> bool:
         """Display text as image using PIL.
