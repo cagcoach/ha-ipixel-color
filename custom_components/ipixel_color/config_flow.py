@@ -78,20 +78,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         
         # Discover devices
         try:
-            discovered = await discover_ipixel_devices(timeout=10)
+            _LOGGER.warning("CONFIG_FLOW: Starting device discovery with timeout=10, return_all=True")
+            discovered = await discover_ipixel_devices(timeout=10, return_all=True)
+            _LOGGER.warning("CONFIG_FLOW: Discovery returned %d devices", len(discovered))
             self._discovered_devices = {
                 device["address"]: device for device in discovered
             }
+            _LOGGER.warning("CONFIG_FLOW: Stored %d devices in _discovered_devices", len(self._discovered_devices))
         except Exception as err:
-            _LOGGER.error("Discovery failed: %s", err)
+            _LOGGER.error("CONFIG_FLOW: Discovery failed: %s", err)
+            import traceback
+            _LOGGER.error("CONFIG_FLOW: Traceback: %s", traceback.format_exc())
             errors["base"] = "discovery_failed"
 
         if not self._discovered_devices and not errors:
             errors["base"] = "no_devices_found"
 
-        # Create device selection list
-        device_options = {}
+        # Create device selection list with star indicators for compatible devices
+        # Sort devices: compatible (starred) devices first, then others
+        compatible_devices = []
+        other_devices = []
+        
         for address, device in self._discovered_devices.items():
+            if device.get("is_compatible", False):
+                compatible_devices.append((address, device))
+            else:
+                other_devices.append((address, device))
+        
+        # Sort each group by name for consistent ordering
+        compatible_devices.sort(key=lambda x: x[1]['name'])
+        other_devices.sort(key=lambda x: x[1]['name'])
+        
+        device_options = {}
+        # Add compatible devices first with stars
+        for address, device in compatible_devices:
+            device_options[address] = f"⭐ {device['name']} ({address})"
+        
+        # Add other devices without stars
+        for address, device in other_devices:
             device_options[address] = f"{device['name']} ({address})"
         
         # Add manual entry option
