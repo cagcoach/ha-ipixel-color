@@ -100,7 +100,14 @@ class BluetoothClient:
                 response_data.append(bytes(data))
                 response_received.set()
                 _LOGGER.info("Device response: %s", data.hex())
-            
+
+            # Stop existing notifications first to avoid "already enabled" error
+            try:
+                await self._client.stop_notify(NOTIFY_UUID)
+            except KeyError:
+                # No callback was registered yet, which is fine
+                pass
+
             # Enable notifications to capture response
             await self._client.start_notify(NOTIFY_UUID, response_handler)
             
@@ -117,9 +124,12 @@ class BluetoothClient:
                         _LOGGER.debug("No response received within timeout")
                 except asyncio.TimeoutError:
                     _LOGGER.debug("No response received within 2 seconds")
-                    
+
             finally:
+                # Restore the original notification handler
                 await self._client.stop_notify(NOTIFY_UUID)
+                if self._notification_handler:
+                    await self._client.start_notify(NOTIFY_UUID, self._notification_handler)
             
             return True
         except BleakError as err:
