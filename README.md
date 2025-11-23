@@ -75,6 +75,16 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 
 - Requires: Home Assistant 2024.1+ and HACS
 
+## Acknowledgments
+
+This Home Assistant integration is built upon the protocol implementations from:
+
+- **[ipixel-ctrl](https://github.com/sdolphin-JP/ipixel-ctrl)** - Python implementation of the iPIXEL protocol by sdolphin-JP, which provided the foundation for device communication and command structure
+- **[go-ipxl](https://github.com/yyewolf/go-ipxl)** - Go implementation by yyewolf that helped understand brightness control and additional protocol details
+- **[pypixelcolor](https://github.com/lucagoc/pypixelcolor)** - Advanced Python library by lucagoc with comprehensive API design, clock mode, and additional device features
+
+Special thanks to sdolphin-JP, yyewolf, and lucagoc for their work in reverse engineering and documenting the iPIXEL Color protocol.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.

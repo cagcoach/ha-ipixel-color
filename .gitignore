@@ -151,6 +151,7 @@ known_devices.yaml
 go-ipxl/
 ipixel-ctrl/
 ipixel-protocol-doc/
+pypixelcolor/
 
 # Home Assistant specific
 home-assistant.log*

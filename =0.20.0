@@ -1,0 +1,18 @@
+Collecting bleak
+  Using cached bleak-1.1.1-py3-none-any.whl.metadata (5.1 kB)
+Collecting pyobjc-core>=10.3 (from bleak)
+  Using cached pyobjc_core-12.1-cp313-cp313-macosx_10_13_universal2.whl.metadata (2.8 kB)
+Collecting pyobjc-framework-CoreBluetooth>=10.3 (from bleak)
+  Using cached pyobjc_framework_corebluetooth-12.1-cp313-cp313-macosx_10_13_universal2.whl.metadata (2.6 kB)
+Collecting pyobjc-framework-libdispatch>=10.3 (from bleak)
+  Using cached pyobjc_framework_libdispatch-12.1-cp313-cp313-macosx_10_13_universal2.whl.metadata (2.5 kB)
+Collecting pyobjc-framework-Cocoa>=12.1 (from pyobjc-framework-CoreBluetooth>=10.3->bleak)
+  Using cached pyobjc_framework_cocoa-12.1-cp313-cp313-macosx_10_13_universal2.whl.metadata (2.6 kB)
+Using cached bleak-1.1.1-py3-none-any.whl (136 kB)
+Using cached pyobjc_core-12.1-cp313-cp313-macosx_10_13_universal2.whl (677 kB)
+Using cached pyobjc_framework_corebluetooth-12.1-cp313-cp313-macosx_10_13_universal2.whl (13 kB)
+Using cached pyobjc_framework_cocoa-12.1-cp313-cp313-macosx_10_13_universal2.whl (384 kB)
+Using cached pyobjc_framework_libdispatch-12.1-cp313-cp313-macosx_10_13_universal2.whl (15 kB)
+Installing collected packages: pyobjc-core, pyobjc-framework-Cocoa, pyobjc-framework-libdispatch, pyobjc-framework-CoreBluetooth, bleak
+
+Successfully installed bleak-1.1.1 pyobjc-core-12.1 pyobjc-framework-Cocoa-12.1 pyobjc-framework-CoreBluetooth-12.1 pyobjc-framework-libdispatch-12.1
