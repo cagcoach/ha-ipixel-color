@@ -28,16 +28,11 @@ async def async_setup_entry(
     async_add_entities([iPIXELStyleControl(hass, api, entry, address, name)])
     
     # Register the set_style service
-    platform = hass.data.get("entity_platform")
-    if platform is not None:
-        platform.async_register_entity_service(
-            "set_style",
-            {
-                "font": str,
-                "font_size": float,
-                "antialias": bool,
-                "line_spacing": int,
-                "preset": str,
-            },
-            "async_set_style",
-        )
+    from homeassistant.helpers import entity_platform
+    platform = entity_platform.async_get_current_platform()
+    
+    platform.async_register_entity_service(
+        "set_style",
+        {},  # Use services.yaml schema for validation
+        "async_set_style",
+    )

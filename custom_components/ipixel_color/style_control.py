@@ -46,7 +46,7 @@ async def async_setup_entry(
     async_add_entities([iPIXELStyleControl(hass, api, entry, address, name)])
 
 
-class iPIXELStyleControl(Entity, RestoreEntity):
+class iPIXELStyleControl(RestoreEntity):
     """Custom entity for comprehensive style control with UI support."""
     
     _attr_should_poll = False
