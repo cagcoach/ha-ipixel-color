@@ -9,13 +9,11 @@ from .bluetooth.client import BluetoothClient
 from .bluetooth.scanner import discover_ipixel_devices
 from .device.commands import (
     make_power_command,
-    make_diy_mode_command,
-    make_default_mode_command,
-    make_png_command,
     make_brightness_command,
 )
 from .device.clock import make_clock_mode_command
 from .device.text import make_text_command
+from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .exceptions import iPIXELConnectionError
@@ -170,8 +168,8 @@ class iPIXELAPI:
             return self._device_info
     
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0) -> bool:
-        """Display text as image using PIL.
-        
+        """Display text as image using PIL and pypixelcolor.
+
         Args:
             text: Text to display (supports multiline with \n)
             antialias: Enable text antialiasing for smoother rendering
@@ -184,43 +182,42 @@ class iPIXELAPI:
             device_info = await self.get_device_info()
             width = device_info["width"]
             height = device_info["height"]
-            
+
             # Render text to PNG
             png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing)
-            
-            # Send as PNG following ipixel-ctrl write_data_png.py
-            data_size = len(png_data)
-            from zlib import crc32
-            data_crc = crc32(png_data) & 0xFFFFFFFF
-            
-            # 1. First exit program mode and enter default mode
-            default_mode_command = make_default_mode_command()
-            _LOGGER.debug("Setting default mode to exit slideshow")
-            await self._bluetooth.send_command(default_mode_command)
-            
-            # 2. Enable DIY mode (mode 1 = enter and clear current, show new)
-            diy_command = make_diy_mode_command(1)
-            _LOGGER.debug("Sending DIY mode command: %s", diy_command.hex())
-            diy_success = await self._bluetooth.send_command(diy_command)
-            if not diy_success:
-                _LOGGER.error("DIY mode command failed")
-                return False
-            
-            # 3. Send PNG command
-            command = make_png_command(png_data)
-            
-            _LOGGER.debug("Sending PNG command: length=%d, data_size=%d", 
-                         len(command), data_size)
-            _LOGGER.debug("PNG header: %s", command[:20].hex())
-            
-            success = await self._bluetooth.send_command(command)
-            if success:
-                _LOGGER.info("PNG sent: %s (%dx%d, %d bytes, CRC: 0x%08x, cmd_len: %d)", 
-                           text, width, height, data_size, data_crc, len(command))
-            else:
-                _LOGGER.error("PNG command failed to send")
-            return success
-            
+
+            # Generate image commands using pypixelcolor
+            commands = make_image_command(
+                image_bytes=png_data,
+                file_extension=".png",
+                resize_method="crop",
+                device_width=width,
+                device_height=height
+            )
+
+            # Send all command frames
+            for i, command in enumerate(commands):
+                _LOGGER.debug(
+                    "Sending pypixelcolor image frame %d/%d: %d bytes",
+                    i + 1,
+                    len(commands),
+                    len(command)
+                )
+                success = await self._bluetooth.send_command(command)
+                if not success:
+                    _LOGGER.error("Failed to send image frame %d/%d", i + 1, len(commands))
+                    return False
+
+            _LOGGER.info(
+                "Text rendered as image: '%s' (%dx%d, %d bytes PNG, %d frames)",
+                text,
+                width,
+                height,
+                len(png_data),
+                len(commands)
+            )
+            return True
+
         except Exception as err:
             _LOGGER.error("Error displaying text: %s", err)
             return False
