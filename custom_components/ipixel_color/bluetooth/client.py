@@ -104,8 +104,9 @@ class BluetoothClient:
             # Stop existing notifications first to avoid "already enabled" error
             try:
                 await self._client.stop_notify(NOTIFY_UUID)
-            except KeyError:
+            except (KeyError, BleakError) as e:
                 # No callback was registered yet, which is fine
+                _LOGGER.debug("Could not stop notifications (not started): %s", e)
                 pass
 
             # Enable notifications to capture response
@@ -127,9 +128,17 @@ class BluetoothClient:
 
             finally:
                 # Restore the original notification handler
-                await self._client.stop_notify(NOTIFY_UUID)
+                try:
+                    await self._client.stop_notify(NOTIFY_UUID)
+                except (KeyError, BleakError) as e:
+                    _LOGGER.debug("Could not stop notifications in cleanup: %s", e)
+                    pass
+
                 if self._notification_handler:
-                    await self._client.start_notify(NOTIFY_UUID, self._notification_handler)
+                    try:
+                        await self._client.start_notify(NOTIFY_UUID, self._notification_handler)
+                    except BleakError as e:
+                        _LOGGER.warning("Could not restart original notification handler: %s", e)
             
             return True
         except BleakError as err:
