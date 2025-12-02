@@ -9,6 +9,8 @@ from typing import Any, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+from ..color import hex_to_rgb
+
 _LOGGER = logging.getLogger(__name__)
 
 # Minimum font size to try
@@ -40,9 +42,9 @@ def _get_font_path(font_name: str) -> str | None:
     return None
 
 
-def render_text_to_png(text: str, width: int, height: int, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0) -> bytes:
-    """Render text to PNG image data.
-    
+def render_text_to_png(text: str, width: int, height: int, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bytes:
+    """Render text to PNG image data with color gradient mapping.
+
     Args:
         text: Text to render (supports multiline with \n)
         width: Display width in pixels
@@ -51,9 +53,17 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
         font_size: Fixed font size in pixels (can be fractional), or None for auto-sizing (default: None)
         font: Font name from fonts/ folder, or None for default (default: None)
         line_spacing: Additional spacing between lines in pixels (default: 0)
-        
+        text_color: Foreground/text color in hex format (e.g., 'ffffff') (default: white)
+        bg_color: Background color in hex format (e.g., '000000') (default: black)
+
     Returns:
         PNG image data as bytes
+
+    Note:
+        Uses linear interpolation to map grayscale values to colors:
+        - 0 (black) → bg_color
+        - 255 (white) → text_color
+        - Intermediate values → interpolated colors
     """
     # Create image with device dimensions
     # Use 'L' mode (grayscale) for non-antialiased to get sharper pixels
@@ -155,18 +165,47 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
         # Move to next line position
         current_y += data['height'] + line_spacing  # Add line spacing between lines
     
+    # Parse hex colors to RGB tuples using utility function
+    try:
+        bg_r, bg_g, bg_b = hex_to_rgb(bg_color)
+        text_r, text_g, text_b = hex_to_rgb(text_color)
+    except (ValueError, IndexError):
+        _LOGGER.error("Invalid color format. Using defaults (white text, black background)")
+        bg_r, bg_g, bg_b = 0, 0, 0
+        text_r, text_g, text_b = 255, 255, 255
+
+    # Apply color gradient mapping using linear interpolation
+    # Convert grayscale image to RGB with gradient mapping
+    if not antialias:
+        # For 1-bit images, convert to grayscale first
+        grayscale_img = img.point(lambda x: 255 if x else 0).convert('L')
+    else:
+        # For RGB images, convert to grayscale
+        grayscale_img = img.convert('L')
+
+    # Create RGB image with interpolated colors
+    rgb_img = Image.new('RGB', (width, height))
+    pixels_gray = grayscale_img.load()
+    pixels_rgb = rgb_img.load()
+
+    for y in range(height):
+        for x in range(width):
+            # Get grayscale value (0-255)
+            gray_value = pixels_gray[x, y]
+
+            # Linear interpolation: t = gray_value / 255.0
+            # color = bg_color * (1-t) + text_color * t
+            t = gray_value / 255.0
+
+            r = int(bg_r * (1 - t) + text_r * t)
+            g = int(bg_g * (1 - t) + text_g * t)
+            b = int(bg_b * (1 - t) + text_b * t)
+
+            pixels_rgb[x, y] = (r, g, b)
+
     # Convert to PNG bytes
     png_buffer = io.BytesIO()
-    
-    # Convert 1-bit image to RGB for PNG output if needed
-    if not antialias:
-        # Convert 1-bit to RGB: 0 -> black (0,0,0), 1 -> white (255,255,255)
-        rgb_img = Image.new('RGB', (width, height), (0, 0, 0))
-        rgb_img.paste(img.point(lambda x: 255 if x else 0), (0, 0))
-        rgb_img.save(png_buffer, format='PNG')
-    else:
-        img.save(png_buffer, format='PNG')
-        
+    rgb_img.save(png_buffer, format='PNG')
     return png_buffer.getvalue()
 
 

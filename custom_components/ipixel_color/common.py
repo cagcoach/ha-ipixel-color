@@ -99,23 +99,32 @@ async def _update_textimage_mode(hass: HomeAssistant, device_name: str, api, tex
         font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float)
         line_spacing = await _get_entity_setting(hass, device_name, "number", "line_spacing", int)
         antialias = await _get_entity_setting(hass, device_name, "switch", "antialiasing", bool)
-        
+
+        # Get color settings
+        text_color = await _get_entity_setting(hass, device_name, "text", "text_color")
+        if not text_color:
+            text_color = "ffffff"  # Default to white
+
+        bg_color = await _get_entity_setting(hass, device_name, "text", "background_color")
+        if not bg_color:
+            bg_color = "000000"  # Default to black
+
         # Connect if needed
         if not api.is_connected:
             _LOGGER.debug("Reconnecting to device for display update")
             await api.connect()
-        
+
         # Resolve templates and process escape sequences
         template_resolved = await resolve_template_variables(hass, text)
         processed_text = template_resolved.replace('\\n', '\n').replace('\\t', '\t')
-        
+
         # Send text to display with current settings
-        success = await api.display_text(processed_text, antialias, font_size, font_name, line_spacing)
+        success = await api.display_text(processed_text, antialias, font_size, font_name, line_spacing, text_color, bg_color)
         
         if success:
-            _LOGGER.info("Display update successful: %s (font: %s, size: %s, antialias: %s, spacing: %spx)",
+            _LOGGER.info("Display update successful: %s (font: %s, size: %s, antialias: %s, spacing: %spx, text: #%s, bg: #%s)",
                        processed_text, font_name or "OpenSans-Light.ttf",
-                       f"{font_size:.1f}px" if font_size else "Auto", antialias, line_spacing)
+                       f"{font_size:.1f}px" if font_size else "Auto", antialias, line_spacing, text_color, bg_color)
         else:
             _LOGGER.error("Display update failed")
             

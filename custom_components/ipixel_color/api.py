@@ -202,8 +202,8 @@ class iPIXELAPI:
             }
             return self._device_info
     
-    async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0) -> bool:
-        """Display text as image using PIL and pypixelcolor.
+    async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bool:
+        """Display text as image using PIL and pypixelcolor with color gradient mapping.
 
         Args:
             text: Text to display (supports multiline with \n)
@@ -211,6 +211,8 @@ class iPIXELAPI:
             font_size: Fixed font size in pixels (can be fractional), or None for auto-sizing
             font: Font name from fonts/ folder, or None for default
             line_spacing: Additional spacing between lines in pixels
+            text_color: Foreground/text color in hex format (e.g., 'ffffff')
+            bg_color: Background color in hex format (e.g., '000000')
         """
         try:
             # Get device dimensions
@@ -218,8 +220,8 @@ class iPIXELAPI:
             width = device_info["width"]
             height = device_info["height"]
 
-            # Render text to PNG
-            png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing)
+            # Render text to PNG with color gradient
+            png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing, text_color, bg_color)
 
             # Generate image commands using pypixelcolor
             commands = make_image_command(
