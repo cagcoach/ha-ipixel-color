@@ -122,18 +122,23 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
 
         # Route to appropriate mode handler
         if mode == MODE_TEXT_IMAGE:
-            return await _update_textimage_mode(hass, device_name, api, text)
+            success = await _update_textimage_mode(hass, device_name, api, text)
         elif mode == MODE_TEXT:
-            return await _update_text_mode(hass, device_name, api, text)
+            success = await _update_text_mode(hass, device_name, api, text)
         elif mode == MODE_CLOCK:
-            return await _update_clock_mode(hass, device_name, api)
+            success = await _update_clock_mode(hass, device_name, api)
         elif mode == MODE_TIMER:
-            # Timer mode is triggered by timer entity state changes, not manual updates
-            _LOGGER.debug("Timer mode active - waiting for timer entity to start")
-            return True
+            success = await _update_timer_mode(hass, device_name, api)
         else:
             _LOGGER.warning("Unknown mode: %s, falling back to textimage", mode)
-            return await _update_textimage_mode(hass, device_name, api, text)
+            success = await _update_textimage_mode(hass, device_name, api, text)
+            mode = MODE_TEXT_IMAGE
+
+        # Store the active mode on successful update
+        if success:
+            api._active_mode = mode
+
+        return success
 
     except Exception as err:
         _LOGGER.error("Error during display update: %s", err)
@@ -353,6 +358,127 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
     except Exception as err:
         _LOGGER.error("Error in text mode update: %s", err)
         return False
+
+
+async def _update_timer_mode(hass: HomeAssistant, device_name: str, api) -> bool:
+    """Update display in timer mode.
+
+    Args:
+        hass: Home Assistant instance
+        device_name: Device name for entity ID lookups
+        api: iPIXEL API instance
+
+    Returns:
+        True if update was successful
+    """
+    from datetime import datetime, timezone
+
+    try:
+        # Get selected timer entity
+        timer_entity_id = get_entity_id_by_unique_id(hass, api._address, "timer_entity_select", "select")
+        timer_select_state = hass.states.get(timer_entity_id) if timer_entity_id else None
+
+        if not timer_select_state or timer_select_state.state == "none":
+            _LOGGER.warning("No timer entity selected - skipping update")
+            return False
+
+        selected_timer = timer_select_state.state
+        timer_state = hass.states.get(selected_timer)
+
+        if not timer_state:
+            _LOGGER.warning("Timer entity %s not found", selected_timer)
+            return False
+
+        # Determine seconds and static flag based on timer state
+        state = timer_state.state
+        attrs = timer_state.attributes
+        seconds = 0
+        static = True  # Default to static
+
+        if state == "active":
+            # Calculate remaining time from finishes_at
+            finishes_at = attrs.get("finishes_at")
+            if finishes_at:
+                try:
+                    finish_time = datetime.fromisoformat(finishes_at.replace("Z", "+00:00"))
+                    now = datetime.now(timezone.utc)
+                    seconds = max(0, int((finish_time - now).total_seconds()))
+                    static = False  # Animated countdown
+                except (ValueError, TypeError) as err:
+                    _LOGGER.error("Failed to parse finishes_at '%s': %s", finishes_at, err)
+        elif state == "paused":
+            # Use remaining attribute
+            remaining = attrs.get("remaining")
+            if remaining:
+                seconds = _parse_timer_duration(remaining)
+            static = True  # Static for paused
+        else:  # idle
+            # Use duration attribute (time it will run when started)
+            duration = attrs.get("duration")
+            if duration:
+                seconds = _parse_timer_duration(duration)
+            static = True  # Static for idle
+
+        if seconds <= 0:
+            _LOGGER.warning("Timer has no valid duration")
+            return False
+
+        # Get font size setting
+        font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float, api._address)
+
+        # Get colors from light entities
+        text_color_hex = get_color_from_light_entity(hass, api._address, "text_color", default="00ff00")
+        bg_color_hex = get_color_from_light_entity(hass, api._address, "background_color", default="000000")
+
+        text_color = (
+            int(text_color_hex[0:2], 16),
+            int(text_color_hex[2:4], 16),
+            int(text_color_hex[4:6], 16),
+        )
+        bg_color = (
+            int(bg_color_hex[0:2], 16),
+            int(bg_color_hex[2:4], 16),
+            int(bg_color_hex[4:6], 16),
+        )
+
+        # Connect if needed
+        if not api.is_connected:
+            _LOGGER.debug("Reconnecting to device for timer mode update")
+            await api.connect()
+
+        # Display timer
+        success = await api.display_timer_gif(
+            duration_seconds=seconds,
+            text_color=text_color,
+            bg_color=bg_color,
+            static=static,
+            font_size=font_size,
+        )
+
+        if success:
+            _LOGGER.info("Timer mode update: %d sec, state=%s, static=%s", seconds, state, static)
+        else:
+            _LOGGER.error("Timer mode update failed")
+
+        return success
+
+    except Exception as err:
+        _LOGGER.error("Error in timer mode update: %s", err)
+        return False
+
+
+def _parse_timer_duration(duration_str: str) -> int:
+    """Parse timer duration string to seconds."""
+    try:
+        parts = duration_str.split(":")
+        if len(parts) == 3:
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+        elif len(parts) == 2:
+            return int(parts[0]) * 60 + int(parts[1])
+        else:
+            return int(float(duration_str))
+    except (ValueError, IndexError):
+        return 0
 
 
 async def _get_entity_setting(hass: HomeAssistant, device_name: str, platform: str, setting: str, value_type=str, address: str = None):

@@ -39,6 +39,7 @@ class iPIXELAPI:
         self._power_state = False
         self._device_info: dict[str, Any] | None = None
         self._device_response: bytes | None = None
+        self._active_mode: str | None = None  # Last mode sent to display
         
     async def connect(self) -> bool:
         """Connect to the iPIXEL device."""
@@ -343,6 +344,8 @@ class iPIXELAPI:
         text_color: tuple[int, int, int] = (0, 255, 0),
         bg_color: tuple[int, int, int] = (0, 0, 0),
         font_path: str | None = None,
+        static: bool = False,
+        font_size: float | None = None,
     ) -> bool:
         """Generate and display a countdown timer GIF on the device.
 
@@ -351,6 +354,8 @@ class iPIXELAPI:
             text_color: RGB tuple for text color (default: green)
             bg_color: RGB tuple for background color (default: black)
             font_path: Path to TTF font file, or None for default
+            static: If True, display static image instead of animated GIF
+            font_size: Font size in pixels, or None for auto-sizing
 
         Returns:
             True if timer GIF was sent successfully
@@ -365,9 +370,9 @@ class iPIXELAPI:
             width = device_info["width"]
             height = device_info["height"]
 
-            # Determine font size based on display height
-            # Use a font size that fits well in the display
-            font_size = max(8, height - 4)
+            # Determine font size based on display height if not specified
+            if font_size is None or font_size == 0:
+                font_size = height - 4
 
             # Use default font if none specified
             if font_path is None:
@@ -393,6 +398,7 @@ class iPIXELAPI:
                     font_path=font_path,
                     width=width,
                     height=height,
+                    static=static,
                 )
 
                 _LOGGER.debug(

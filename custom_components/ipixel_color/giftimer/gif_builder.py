@@ -9,8 +9,23 @@ DEFAULT_FG = (0, 255, 0)
 
 
 def build_timer_gif(duration_seconds, output_path, font_size=72, bg=DEFAULT_BG, fg=DEFAULT_FG,
-                    font_path=None, width=None, height=None):
-    """Build a countdown timer GIF."""
+                    font_path=None, width=None, height=None, static=False):
+    """Build a countdown timer GIF or static image.
+
+    Args:
+        duration_seconds: Time to display/countdown from in seconds
+        output_path: Path to save the output file
+        font_size: Font size in pixels
+        bg: Background color as RGB tuple
+        fg: Foreground/text color as RGB tuple
+        font_path: Path to TTF font file, or None for default
+        width: Image width, or None for auto
+        height: Image height, or None for auto
+        static: If True, generate a single-frame static image instead of animated GIF
+
+    Returns:
+        Number of frames (1 for static, duration_seconds+1 for animated)
+    """
     font = get_font(font_size, font_path)
     palette = create_palette(bg, fg)
     padding = 20
@@ -26,6 +41,20 @@ def build_timer_gif(duration_seconds, output_path, font_size=72, bg=DEFAULT_BG, 
     if height is None:
         height = text_h + 2 * padding
 
+    if static:
+        # Generate single static frame showing the duration
+        time_text = format_time(duration_seconds)
+        frame, _, _ = create_frame(time_text, width, height, font, palette)
+
+        # Save as single-frame GIF (or PNG based on extension)
+        if output_path.lower().endswith('.png'):
+            frame.convert("RGB").save(output_path, format="PNG")
+        else:
+            frame.save(output_path, format="GIF")
+
+        return 1
+
+    # Generate animated countdown GIF
     frames = []
     durations = []
     prev_frame = None

@@ -399,99 +399,25 @@ class iPIXELTimerEntitySelect(SelectEntity, RestoreEntity):
                 new_state.state
             )
 
-            # Only trigger when timer becomes active (started)
-            if new_state.state == "active":
-                # Check if we're in timer mode
-                mode_entity_id = get_entity_id_by_unique_id(
-                    self.hass, self._address, "mode_select", "select"
+            # Check if timer mode is active on the display
+            if self._api._active_mode == MODE_TIMER:
+                _LOGGER.debug("Timer state changed, updating timer display")
+                self.hass.async_create_task(
+                    self._update_timer_on_callback()
                 )
-                mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-                if mode_state and mode_state.state == MODE_TIMER:
-                    # Get the remaining duration from the timer
-                    duration = new_state.attributes.get("duration", "0:00:00")
-                    # Parse duration string (H:MM:SS or M:SS format)
-                    duration_seconds = self._parse_duration(duration)
-
-                    if duration_seconds > 0:
-                        _LOGGER.info(
-                            "Timer started! Displaying %d second countdown",
-                            duration_seconds
-                        )
-                        # Schedule the timer GIF display
-                        self.hass.async_create_task(
-                            self._display_timer(duration_seconds)
-                        )
 
         self._unsub_state_change = async_track_state_change_event(
             self.hass, timer_entity_id, async_timer_state_changed
         )
         _LOGGER.debug("Set up state listener for timer: %s", timer_entity_id)
 
-    def _parse_duration(self, duration_str: str) -> int:
-        """Parse duration string to seconds.
-
-        Accepts formats: H:MM:SS, MM:SS, or seconds as string
-        """
+    async def _update_timer_on_callback(self) -> None:
+        """Update timer display on callback without changing active mode."""
+        from .common import _update_timer_mode
         try:
-            parts = duration_str.split(":")
-            if len(parts) == 3:
-                # H:MM:SS
-                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-            elif len(parts) == 2:
-                # MM:SS or M:SS
-                return int(parts[0]) * 60 + int(parts[1])
-            else:
-                # Just seconds
-                return int(float(duration_str))
-        except (ValueError, IndexError) as err:
-            _LOGGER.error("Failed to parse duration '%s': %s", duration_str, err)
-            return 0
-
-    async def _display_timer(self, duration_seconds: int) -> None:
-        """Display the timer countdown GIF on the device."""
-        try:
-            # Get colors from light entities
-            from .common import get_color_from_light_entity
-
-            text_color_hex = get_color_from_light_entity(
-                self.hass, self._address, "text_color", default="00ff00"
-            )
-            bg_color_hex = get_color_from_light_entity(
-                self.hass, self._address, "background_color", default="000000"
-            )
-
-            # Convert hex to RGB tuples
-            text_color = (
-                int(text_color_hex[0:2], 16),
-                int(text_color_hex[2:4], 16),
-                int(text_color_hex[4:6], 16),
-            )
-            bg_color = (
-                int(bg_color_hex[0:2], 16),
-                int(bg_color_hex[2:4], 16),
-                int(bg_color_hex[4:6], 16),
-            )
-
-            # Connect if needed
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device for timer display")
-                await self._api.connect()
-
-            # Display the timer GIF
-            success = await self._api.display_timer_gif(
-                duration_seconds=duration_seconds,
-                text_color=text_color,
-                bg_color=bg_color,
-            )
-
-            if success:
-                _LOGGER.info("Timer countdown displayed successfully")
-            else:
-                _LOGGER.error("Failed to display timer countdown")
-
+            await _update_timer_mode(self.hass, self._name, self._api)
         except Exception as err:
-            _LOGGER.error("Error displaying timer: %s", err)
+            _LOGGER.error("Error updating timer on callback: %s", err)
 
     @property
     def available(self) -> bool:
