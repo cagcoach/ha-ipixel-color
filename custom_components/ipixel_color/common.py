@@ -283,15 +283,23 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             # Use pypixelcolor's built-in fonts or default
             font = "CUSONG"
 
-        # Get text color from light entity
-        color = get_color_from_light_entity(hass, api._address, "text_color", default="ffffff")
-        if color == "000000":
-            color = "010000"  # Use near-black instead of pure black for text mode
-        _LOGGER.debug("Text mode - text color: #%s", color)
-
         # Get background color from light entity
         bg_color = get_color_from_light_entity(hass, api._address, "background_color", default=None)
         _LOGGER.debug("Text mode - background color: %s", f"#{bg_color}" if bg_color else "none")
+
+        # Get text color from light entity
+        color = get_color_from_light_entity(hass, api._address, "text_color", default="ffffff")
+        if color == "000000":
+            # Use near-black with 1 in the channel matching bg's max value
+            bg = bg_color or "000000"
+            r, g, b = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
+            if g >= r and g >= b:
+                color = "000100"
+            elif b >= r:
+                color = "000001"
+            else:
+                color = "010000"
+        _LOGGER.debug("Text mode - text color: #%s", color)
 
         # Animation - need new number entity
         animation = await _get_entity_setting(hass, device_name, "number", "text_animation", int, api._address)
