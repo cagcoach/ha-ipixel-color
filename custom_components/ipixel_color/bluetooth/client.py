@@ -120,8 +120,13 @@ class BluetoothClient:
         Raises:
             iPIXELConnectionError: If not connected
         """
+        import time
+
         if not self._connected or not self._client:
             raise iPIXELConnectionError("Device not connected")
+
+        command_size = len(command)
+        start_time = time.perf_counter()
 
         try:
             # Set up temporary response capture
@@ -170,9 +175,16 @@ class BluetoothClient:
                     except BleakError as e:
                         _LOGGER.warning("Could not restart original notification handler: %s", e)
 
+            elapsed_time = time.perf_counter() - start_time
+            throughput = command_size / elapsed_time if elapsed_time > 0 else 0
+            _LOGGER.debug(
+                "BLE send: %d bytes in %.1f ms (%.1f KB/s)",
+                command_size, elapsed_time * 1000, throughput / 1024
+            )
             return True
         except BleakError as err:
-            _LOGGER.error("Failed to send command: %s", err)
+            elapsed_time = time.perf_counter() - start_time
+            _LOGGER.error("Failed to send command (%d bytes) after %.1f ms: %s", command_size, elapsed_time * 1000, err)
             return False
 
     @property
