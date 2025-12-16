@@ -285,6 +285,8 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
 
         # Get text color from light entity
         color = get_color_from_light_entity(hass, api._address, "text_color", default="ffffff")
+        if color == "000000":
+            color = "010000"  # Use near-black instead of pure black for text mode
         _LOGGER.debug("Text mode - text color: #%s", color)
 
         # Get background color from light entity
