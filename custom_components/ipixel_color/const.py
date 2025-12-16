@@ -27,11 +27,13 @@ RECONNECT_DELAY = 1  # seconds between retry attempts
 MODE_TEXT_IMAGE = "textimage"
 MODE_TEXT = "text"
 MODE_CLOCK = "clock"
+MODE_TIMER = "timer"
 
 AVAILABLE_MODES = [
     MODE_TEXT_IMAGE,
     MODE_TEXT,
     MODE_CLOCK,
+    MODE_TIMER,
 ]
 
 DEFAULT_MODE = MODE_TEXT_IMAGE

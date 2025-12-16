@@ -19,6 +19,7 @@ from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .exceptions import iPIXELConnectionError
+from .giftimer import build_timer_gif
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -334,6 +335,107 @@ class iPIXELAPI:
 
         except Exception as err:
             _LOGGER.error("Error displaying pypixelcolor text: %s", err)
+            return False
+
+    async def display_timer_gif(
+        self,
+        duration_seconds: int,
+        text_color: tuple[int, int, int] = (0, 255, 0),
+        bg_color: tuple[int, int, int] = (0, 0, 0),
+        font_path: str | None = None,
+    ) -> bool:
+        """Generate and display a countdown timer GIF on the device.
+
+        Args:
+            duration_seconds: Total countdown duration in seconds
+            text_color: RGB tuple for text color (default: green)
+            bg_color: RGB tuple for background color (default: black)
+            font_path: Path to TTF font file, or None for default
+
+        Returns:
+            True if timer GIF was sent successfully
+        """
+        try:
+            import tempfile
+            import os
+            from pathlib import Path
+
+            # Get device dimensions
+            device_info = await self.get_device_info()
+            width = device_info["width"]
+            height = device_info["height"]
+
+            # Determine font size based on display height
+            # Use a font size that fits well in the display
+            font_size = max(8, height - 4)
+
+            # Use default font if none specified
+            if font_path is None:
+                fonts_dir = Path(__file__).parent / "fonts"
+                # Try to find a good monospace font for timer display
+                for font_name in ["7x5.ttf", "5x5.ttf", "OpenSans-Light.ttf"]:
+                    potential_font = fonts_dir / font_name
+                    if potential_font.exists():
+                        font_path = str(potential_font)
+                        break
+
+            # Generate timer GIF to temporary file
+            with tempfile.NamedTemporaryFile(suffix=".gif", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            try:
+                frame_count = build_timer_gif(
+                    duration_seconds=duration_seconds,
+                    output_path=tmp_path,
+                    font_size=font_size,
+                    bg=bg_color,
+                    fg=text_color,
+                    font_path=font_path,
+                    width=width,
+                    height=height,
+                )
+
+                _LOGGER.debug(
+                    "Generated timer GIF: %d seconds, %d frames, %dx%d",
+                    duration_seconds, frame_count, width, height
+                )
+
+                # Read the generated GIF
+                with open(tmp_path, "rb") as f:
+                    gif_data = f.read()
+
+            finally:
+                # Clean up temp file
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
+            # Generate image commands using pypixelcolor
+            commands = make_image_command(
+                image_bytes=gif_data,
+                file_extension=".gif",
+                resize_method="crop",
+                device_info_dict=device_info
+            )
+
+            # Send all command frames
+            for i, command in enumerate(commands):
+                _LOGGER.debug(
+                    "Sending timer GIF frame %d/%d: %d bytes",
+                    i + 1, len(commands), len(command)
+                )
+                success = await self._bluetooth.send_command(command)
+                if not success:
+                    _LOGGER.error("Failed to send timer GIF frame %d/%d", i + 1, len(commands))
+                    return False
+
+            _LOGGER.info(
+                "Timer GIF sent: %d seconds countdown (%dx%d, %d bytes, %d frames)",
+                duration_seconds, width, height, len(gif_data), len(commands)
+            )
+            return True
+
+        except Exception as err:
+            _LOGGER.error("Error displaying timer GIF: %s", err)
             return False
 
     def _notification_handler(self, sender: Any, data: bytearray) -> None:

@@ -5,7 +5,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, MODE_TIMER, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,6 +127,10 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
             return await _update_text_mode(hass, device_name, api, text)
         elif mode == MODE_CLOCK:
             return await _update_clock_mode(hass, device_name, api)
+        elif mode == MODE_TIMER:
+            # Timer mode is triggered by timer entity state changes, not manual updates
+            _LOGGER.debug("Timer mode active - waiting for timer entity to start")
+            return True
         else:
             _LOGGER.warning("Unknown mode: %s, falling back to textimage", mode)
             return await _update_textimage_mode(hass, device_name, api, text)
@@ -294,7 +298,7 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             # We weight the channels since not each color appears as bright as the others.
             # In this way we choose the channel which should be less obvious.
             bg = bg_color or "000000"
-            r, g, b = int(bg[0:2], 16)*333, int(bg[2:4], 16)*169, int(bg[4:6], 16)*909 
+            r, g, b = int(bg[0:2], 16)*333, int(bg[2:4], 16)*169, int(bg[4:6], 16)*909
             if g >= r and g >= b:
                 color = "000100"
             elif b >= r:
