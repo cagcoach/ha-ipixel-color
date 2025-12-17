@@ -1,0 +1,23 @@
+{
+  "name": "5x5",
+  "metrics": {
+    "16": {
+      "font_size": 24,
+      "offset": [0, -8],
+      "pixel_threshold": 70,
+      "var_width": true 
+    },
+    "24": {
+      "font_size": 24,
+      "offset": [0, -1],
+      "pixel_threshold": 80,
+      "var_width": true
+    },
+    "32": {
+      "font_size": 25,
+      "offset": [0, 2],
+      "pixel_threshold": 85,
+      "var_width": true
+    }
+  }
+}
