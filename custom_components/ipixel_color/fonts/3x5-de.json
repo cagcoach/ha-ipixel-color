@@ -2,8 +2,8 @@
   "name": "3x5-de",
   "metrics": {
     "16": {
-      "font_size": 16,
-      "offset": [0, 0],
+      "font_size": 12,
+      "offset": [0, 3],
       "pixel_threshold": 70,
       "var_width": true 
     },

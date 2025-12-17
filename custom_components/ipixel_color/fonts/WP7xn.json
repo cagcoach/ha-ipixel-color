@@ -2,9 +2,9 @@
   "name": "WP7xn",
   "metrics": {
     "16": {
-      "font_size": 16,
-      "offset": [0, -9],
-      "pixel_threshold": 70,
+      "font_size": 14,
+      "offset": [0, -6],
+      "pixel_threshold": 30,
       "var_width": true 
     },
     "24": {
