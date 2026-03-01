@@ -151,63 +151,79 @@ class iPIXELAPI:
             return False
     
     async def get_device_info(self) -> dict[str, Any] | None:
-        """Query device information and store it."""
+        """Query device information and store it (with retry logic)."""
         if self._device_info is not None:
             return self._device_info
             
-        try:
-            command = build_device_info_command()
-            
-            # Set up notification response
-            self._device_response = None
-            response_received = asyncio.Event()
-            
-            def response_handler(sender: Any, data: bytearray) -> None:
-                self._device_response = bytes(data)
-                response_received.set()
-            
-            # Enable notifications temporarily
-            await self._bluetooth._client.start_notify(
-                "0000fa03-0000-1000-8000-00805f9b34fb", response_handler
-            )
-            
+        max_retries = 3
+        notify_char = "0000fa03-0000-1000-8000-00805f9b34fb"
+        write_char = "0000fa02-0000-1000-8000-00805f9b34fb"
+        
+        for attempt in range(max_retries):
             try:
-                # Send command
-                await self._bluetooth._client.write_gatt_char(
-                    "0000fa02-0000-1000-8000-00805f9b34fb", command
-                )
+                command = build_device_info_command()
                 
-                # Wait for response (5 second timeout)
-                await asyncio.wait_for(response_received.wait(), timeout=5.0)
+                # Set up notification response
+                self._device_response = None
+                response_received = asyncio.Event()
                 
-                if self._device_response:
-                    self._device_info = parse_device_response(self._device_response)
-                else:
-                    raise Exception("No response received")
+                def response_handler(sender: Any, data: bytearray) -> None:
+                    self._device_response = bytes(data)
+                    response_received.set()
+                
+                # Try to enable notifications, but catch "already acquired" error
+                try:
+                    await self._bluetooth._client.start_notify(notify_char, response_handler)
+                except Exception as notify_err:
+                    if "Notify acquired" in str(notify_err):
+                        _LOGGER.debug("Notifications already active, continuing...")
+                    else:
+                        raise  # Re-raise if it's a different error
+                
+                try:
+                    # Send command
+                    await self._bluetooth._client.write_gatt_char(write_char, command)
                     
-            finally:
-                await self._bluetooth._client.stop_notify(
-                    "0000fa03-0000-1000-8000-00805f9b34fb"
-                )
+                    # Wait for response with increased timeout (10 seconds)
+                    await asyncio.wait_for(response_received.wait(), timeout=10.0)
+                    
+                    if self._device_response:
+                        self._device_info = parse_device_response(self._device_response)
+                        _LOGGER.info("Device info retrieved on attempt %d: %s", attempt + 1, self._device_info)
+                        return self._device_info
+                    else:
+                        raise Exception("No response received")
+                        
+                finally:
+                    # Clean up notifications
+                    try:
+                        await self._bluetooth._client.stop_notify(notify_char)
+                    except Exception as stop_err:
+                        _LOGGER.debug("Could not stop notify (might be normal): %s", stop_err)
             
-            _LOGGER.info("Device info retrieved: %s", self._device_info)
-            return self._device_info
-            
-        except Exception as err:
-            _LOGGER.error("Failed to get device info: %s", err)
-            # Return default values
-            self._device_info = {
-                "width": 64,
-                "height": 16,
-                "device_type": 0,
-                "device_type_str": "Unknown",
-                "led_type": 0,
-                "mcu_version": "Unknown",
-                "wifi_version": "Unknown",
-                "has_wifi": False,
-                "password_flag": 255
-            }
-            return self._device_info
+            except asyncio.TimeoutError:
+                _LOGGER.warning("Timeout waiting for device info (attempt %d/%d)", attempt + 1, max_retries)
+            except Exception as err:
+                _LOGGER.warning("Attempt %d/%d failed to get device info: %s", attempt + 1, max_retries, err)
+                
+            # Short delay before next attempt
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1.0)
+                
+        # If we reach here, all retries failed. Return default values.
+        _LOGGER.error("All %d attempts failed to get device info. Using defaults.", max_retries)
+        self._device_info = {
+            "width": 64,
+            "height": 16,
+            "device_type": 0,
+            "device_type_str": "Unknown",
+            "led_type": 0,
+            "mcu_version": "Unknown",
+            "wifi_version": "Unknown",
+            "has_wifi": False,
+            "password_flag": 255
+        }
+        return self._device_info
     
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bool:
         """Display text as image using PIL and pypixelcolor with color gradient mapping.
