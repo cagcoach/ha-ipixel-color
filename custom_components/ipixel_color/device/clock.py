@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from typing import Optional
+import datetime
+import homeassistant.util.dt as dt_util
 
 try:
     from pypixelcolor.commands.set_clock_mode import set_clock_mode
@@ -60,9 +62,10 @@ def make_time_command(
     minute: Optional[int] = None,
     second: Optional[int] = None
 ) -> bytes:
-    """Build time sync command using pypixelcolor.
+    """Build time sync command using pypixelcolor with local time.
 
     Sends the current time to the device to keep the clock synchronized.
+    Uses Home Assistant's local time if no parameters provided.
 
     Args:
         hour: Hour to set (0-23). If None, uses current hour.
@@ -79,6 +82,14 @@ def make_time_command(
     if set_time is None:
         raise ImportError("pypixelcolor library is not installed")
 
+    # If any of the time components are None, get the current local time from Home Assistant
+    if hour is None or minute is None or second is None:
+        # Get the current local time using Home Assistant's utility function
+        now = dt_util.now()
+        hour = now.hour
+        minute = now.minute
+        second = now.second
+
     # Call pypixelcolor's set_time function
     send_plan = set_time(hour=hour, minute=minute, second=second)
 
@@ -86,5 +97,5 @@ def make_time_command(
     if send_plan.windows and len(list(send_plan.windows)) > 0:
         first_window = next(iter(send_plan.windows))
         return first_window.data
-    else:
-        raise ValueError("pypixelcolor returned empty SendPlan")
+
+    raise ValueError("pypixelcolor returned empty SendPlan")
