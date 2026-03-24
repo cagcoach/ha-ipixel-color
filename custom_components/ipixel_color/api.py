@@ -273,7 +273,8 @@ class iPIXELAPI:
         font: str = "CUSONG",
         animation: int = 0,
         speed: int = 80,
-        rainbow_mode: int = 0
+        rainbow_mode: int = 0,
+        font_size: int = 16
     ) -> bool:
         """Display text using pypixelcolor.
 
@@ -285,6 +286,7 @@ class iPIXELAPI:
             animation: Animation type (0-7)
             speed: Animation speed (0-100)
             rainbow_mode: Rainbow mode (0-9)
+            font_size: Font size (16, 32, 48, 64) defaults to 16
 
         Returns:
             True if text was sent successfully
@@ -293,6 +295,12 @@ class iPIXELAPI:
             # Get device info for height
             device_info = await self.get_device_info()
             device_height = device_info["height"]
+
+            if font_size > device_height:
+                font_size = device_height
+            if font_size < 16:
+                font_size = 16
+            char_height = floor(font_size / 16) * 16
 
             # Generate text commands using pypixelcolor
             commands = make_text_command(
@@ -304,7 +312,7 @@ class iPIXELAPI:
                 speed=speed,
                 rainbow_mode=rainbow_mode,
                 save_slot=0,
-                device_height=device_height
+                char_height=char_height
             )
 
             # Send all command frames
