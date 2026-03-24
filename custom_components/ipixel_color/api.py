@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, TYPE_CHECKING
+from math import floor
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
