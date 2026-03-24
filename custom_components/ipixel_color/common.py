@@ -313,6 +313,12 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         if speed is None:
             speed = 80  # Default speed
 
+        # Font size - need new number entity
+        font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float, api._address)
+        if font_size is None:
+            speed = 16  # Default font_size
+        font_size = int(font_size)
+
         # Rainbow mode - need new number entity
         rainbow_mode = await _get_entity_setting(hass, device_name, "number", "text_rainbow", int, api._address)
         if rainbow_mode is None:
@@ -335,7 +341,8 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             font=font,
             animation=animation,
             speed=speed,
-            rainbow_mode=rainbow_mode
+            rainbow_mode=rainbow_mode,
+            font_size=font_size
         )
 
         if success:
