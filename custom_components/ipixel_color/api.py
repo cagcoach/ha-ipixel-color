@@ -18,6 +18,7 @@ from .device.text import make_text_command
 from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
+from .display.emoji_renderer import render_emoji_to_png
 from .exceptions import iPIXELConnectionError
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class iPIXELAPI:
             hass: Home Assistant instance
             address: Bluetooth MAC address
         """
+        self._hass = hass
         self._address = address
         self._bluetooth = BluetoothClient(hass, address)
         self._power_state = False
@@ -334,6 +336,69 @@ class iPIXELAPI:
 
         except Exception as err:
             _LOGGER.error("Error displaying pypixelcolor text: %s", err)
+            return False
+
+    async def display_emoji(
+        self,
+        emoji: str,
+        bg_color: str = "000000",
+        width_override: int | None = None,
+        height_override: int | None = None,
+    ) -> bool:
+        """Display an emoji as a Twemoji image, downloaded async and cached locally.
+
+        Unlike display_text_pypixelcolor (which delegates emoji handling to
+        pypixelcolor and currently triggers a blocking HTTP call inside the
+        event loop), this method downloads the Twemoji PNG asynchronously,
+        caches it under hass.config.path(".storage/ipixel_emoji_cache"), and
+        composes it onto a canvas matching the device dimensions.
+
+        Args:
+            emoji: Unicode emoji character (e.g. '🔔', '🚨', '⚠️')
+            bg_color: Background color in hex (default '000000')
+            width_override: Optional canvas width override. Useful when the
+                firmware reports incorrect dimensions for the physical panel.
+                Defaults to device_info width.
+            height_override: Optional canvas height override.
+
+        Returns:
+            True if the emoji was rendered and sent successfully.
+        """
+        try:
+            base_info = await self.get_device_info()
+            width = width_override or base_info["width"]
+            height = height_override or base_info["height"]
+            device_info = {**base_info, "width": width, "height": height}
+
+            png_data = await render_emoji_to_png(self._hass, emoji, width, height, bg_color)
+            if png_data is None:
+                _LOGGER.error("Could not render emoji %r (download or cache miss)", emoji)
+                return False
+
+            commands = make_image_command(
+                image_bytes=png_data,
+                file_extension=".png",
+                resize_method="crop",
+                device_info_dict=device_info,
+            )
+
+            if not self.is_connected:
+                await self.connect()
+
+            for i, command in enumerate(commands):
+                success = await self._bluetooth.send_command(command)
+                if not success:
+                    _LOGGER.error("Failed to send emoji frame %d/%d", i + 1, len(commands))
+                    return False
+
+            _LOGGER.info(
+                "Emoji %r displayed (%dx%d, %d frames)",
+                emoji, width, height, len(commands),
+            )
+            return True
+
+        except Exception as err:
+            _LOGGER.exception("Error displaying emoji %r: %s", emoji, err)
             return False
 
     def _notification_handler(self, sender: Any, data: bytearray) -> None:

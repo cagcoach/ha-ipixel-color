@@ -1,3 +1,52 @@
+show_emoji:
+  name: Show Emoji
+  description: >
+    Display an emoji (Twemoji) on the iPIXEL device. The PNG is downloaded
+    once from the Twemoji CDN, cached locally, and rendered at the device
+    dimensions. Useful for HA notifications (doorbell, alerts, etc.).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    emoji:
+      name: Emoji
+      description: A single emoji character (or sequence) to display
+      required: true
+      example: "🔔"
+      selector:
+        text:
+    bg_color:
+      name: Background Color
+      description: Background color (defaults to black)
+      required: false
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
+    width:
+      name: Width override
+      description: >
+        Optional canvas width override. Use only if the firmware reports
+        incorrect dimensions for your panel. Default: device-reported width.
+      required: false
+      example: 32
+      selector:
+        number:
+          min: 1
+          max: 512
+          mode: box
+    height:
+      name: Height override
+      description: >
+        Optional canvas height override. Use only if the firmware reports
+        incorrect dimensions for your panel. Default: device-reported height.
+      required: false
+      example: 32
+      selector:
+        number:
+          min: 1
+          max: 512
+          mode: box
+
 display_text:
   name: Display Text
   description: Display text on the iPIXEL device with custom effects and colors
