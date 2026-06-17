@@ -32,10 +32,6 @@ async def async_setup_entry(
     
     async_add_entities([
         iPIXELSwitch(api, entry, address, name),
-        iPIXELAntialiasingSwitch(api, entry, address, name),
-        iPIXELAutoUpdateSwitch(api, entry, address, name),
-        iPIXELClock24HSwitch(hass, api, entry, address, name),
-        iPIXELClockShowDateSwitch(hass, api, entry, address, name),
     ])
 
 

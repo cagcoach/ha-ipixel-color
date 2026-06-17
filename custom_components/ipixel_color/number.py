@@ -30,12 +30,7 @@ async def async_setup_entry(
     api = hass.data[DOMAIN][entry.entry_id]
     
     async_add_entities([
-        iPIXELFontSize(api, entry, address, name),
-        iPIXELLineSpacing(api, entry, address, name),
         iPIXELBrightness(api, entry, address, name),
-        iPIXELTextAnimation(hass, api, entry, address, name),
-        iPIXELTextSpeed(hass, api, entry, address, name),
-        iPIXELTextRainbow(hass, api, entry, address, name),
     ])
 
 
@@ -187,7 +182,7 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
 
     _attr_mode = NumberMode.SLIDER
     _attr_native_min_value = 1  # Minimum brightness (0 is invalid)
-    _attr_native_max_value = 100  # Maximum brightness
+    _attr_native_max_value = 10  # User-facing brightness scale
     _attr_native_step = 1
     _attr_icon = "mdi:brightness-6"
     _attr_entity_category = None
@@ -206,8 +201,8 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Brightness"
         self._attr_unique_id = f"{address}_brightness"
-        self._attr_native_value = 50  # Default brightness is 50%
-        self._attr_entity_description = "Display brightness level (1-100)"
+        self._attr_native_value = 5  # Default brightness is 5/10
+        self._attr_entity_description = "Display brightness level (1-10)"
         
         # Device info for grouping in device registry
         self._attr_device_info = DeviceInfo(
@@ -227,15 +222,17 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
         if last_state is not None and last_state.state not in ("unknown", "unavailable"):
             try:
                 value = int(float(last_state.state))
-                if 1 <= value <= 100:
+                if value > 10:
+                    value = max(1, min(10, round(value / 10)))
+                if 1 <= value <= 10:
                     self._attr_native_value = value
                     _LOGGER.debug("Restored brightness: %d", self._attr_native_value)
                 else:
-                    _LOGGER.warning("Invalid brightness value %d, using default 50", value)
-                    self._attr_native_value = 50
+                    _LOGGER.warning("Invalid brightness value %d, using default 5", value)
+                    self._attr_native_value = 5
             except (ValueError, TypeError):
                 _LOGGER.warning("Could not restore brightness from: %s", last_state.state)
-                self._attr_native_value = 50
+                self._attr_native_value = 5
 
     @property
     def native_value(self) -> float | None:
@@ -245,19 +242,24 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the brightness."""
         brightness = int(value)
-        if 1 <= brightness <= 100:
+        if 1 <= brightness <= 10:
             try:
+                device_brightness = brightness * 10
                 # Send brightness command to device
-                success = await self._api.set_brightness(brightness)
+                success = await self._api.set_brightness(device_brightness)
                 if success:
                     self._attr_native_value = brightness
-                    _LOGGER.info("Brightness set to %d%%", brightness)
+                    _LOGGER.info(
+                        "Brightness set to %d/10 (%d%%)",
+                        brightness,
+                        device_brightness,
+                    )
                 else:
-                    _LOGGER.error("Failed to set brightness to %d%%", brightness)
+                    _LOGGER.error("Failed to set brightness to %d/10", brightness)
             except Exception as err:
                 _LOGGER.error("Error setting brightness: %s", err)
         else:
-            _LOGGER.error("Invalid brightness: %d (must be 1-100)", brightness)
+            _LOGGER.error("Invalid brightness: %d (must be 1-10)", brightness)
 
     @property
     def available(self) -> bool:

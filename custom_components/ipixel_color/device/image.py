@@ -1,6 +1,7 @@
 """Image display commands using pypixelcolor."""
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 try:
@@ -9,6 +10,8 @@ try:
 except ImportError:
     send_image_hex = None
     SendPlan = None
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def make_image_command(
@@ -35,6 +38,27 @@ def make_image_command(
     """
     if send_image_hex is None:
         raise ImportError("pypixelcolor library is not installed")
+
+    if device_info_dict is not None:
+        width = int(device_info_dict["width"])
+        height = int(device_info_dict["height"])
+        if width <= 0 or height <= 0:
+            raise ValueError(f"Invalid display dimensions: {width}x{height}")
+        _LOGGER.debug(
+            "Building image command: input_payload=%d bytes target=%dx%d "
+            "pixels=%d device_type=%s led_type=%s",
+            len(image_bytes),
+            width,
+            height,
+            width * height,
+            device_info_dict.get("device_type"),
+            device_info_dict.get("led_type"),
+        )
+    else:
+        _LOGGER.debug(
+            "Building image command without device info: input_payload=%d bytes",
+            len(image_bytes),
+        )
 
     # Convert bytes to hex string for pypixelcolor
     hex_string = image_bytes.hex()
@@ -66,5 +90,11 @@ def make_image_command(
     commands = []
     for window in send_plan.windows:
         commands.append(window.data)
+
+    _LOGGER.debug(
+        "Built image command payload: frames=%d total_bytes=%d",
+        len(commands),
+        sum(len(command) for command in commands),
+    )
 
     return commands

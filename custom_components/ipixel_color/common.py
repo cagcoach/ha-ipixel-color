@@ -118,7 +118,7 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
         if not mode:
             mode = MODE_TEXT_IMAGE  # Default to textimage mode
 
-        _LOGGER.debug("Updating display in mode: %s", mode)
+        _LOGGER.debug("Updating display: selected_mode=%s", mode)
 
         # Route to appropriate mode handler
         if mode == MODE_TEXT_IMAGE:

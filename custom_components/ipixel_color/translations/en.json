@@ -13,7 +13,17 @@
         "description": "Enter the Bluetooth address of your iPIXEL Color display manually.",
         "data": {
           "address": "Bluetooth Address",
-          "name": "Device Name"
+          "name": "Device Name",
+          "display_width": "Display Width Override",
+          "display_height": "Display Height Override"
+        }
+      },
+      "init": {
+        "title": "iPIXEL Display Options",
+        "description": "Set both width and height to override device detection. Use 0 for both to use the detected size.",
+        "data": {
+          "display_width": "Display Width Override",
+          "display_height": "Display Height Override"
         }
       },
       "bluetooth_confirm": {
@@ -36,6 +46,18 @@
       "discovery_failed": "Device discovery failed.",
       "no_devices_found": "No devices found.",
       "unknown": "Unknown error occurred."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iPIXEL Display Options",
+        "description": "Set both width and height to override device detection. Use 0 for both to use the detected size.",
+        "data": {
+          "display_width": "Display Width Override",
+          "display_height": "Display Height Override"
+        }
+      }
     }
   },
   "entity": {

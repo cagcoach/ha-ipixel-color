@@ -36,7 +36,7 @@ async def async_setup_entry(
 
 
 class iPIXELTextDisplay(TextEntity, RestoreEntity):
-    """Representation of an iPIXEL Color text display."""
+    """Representation of an iPIXEL Color weather clock custom text field."""
 
     _attr_mode = TextMode.TEXT
     _attr_native_max = 500  # Maximum 500 characters per protocol
@@ -55,7 +55,7 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         self._entry = entry
         self._address = address
         self._name = name
-        self._attr_name = "Display"
+        self._attr_name = "Custom Text"
         self._attr_unique_id = f"{address}_text_display"
         self._current_text = ""
         self._available = True
@@ -103,18 +103,7 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
             # Store the original text value (preserving \n as typed)
             self._current_text = value
             
-            # Check if auto-update is enabled
-            auto_update = await self._get_auto_update_setting()
-            if not auto_update:
-                _LOGGER.debug("Auto-update disabled - text stored but not sent to display. Use update button to refresh.")
-                return
-            
-            # Resolve templates and process escape sequences when sending to display
-            template_resolved = await resolve_template_variables(self.hass, value)
-            processed_text = template_resolved.replace('\\n', '\n').replace('\\t', '\t')
-            
-            # Auto-update is enabled, proceed with display update
-            await self._update_display(processed_text)
+            _LOGGER.debug("Weather clock custom text changed to: %s", value)
                 
         except iPIXELConnectionError as err:
             _LOGGER.error("Connection error while displaying text: %s", err)
@@ -156,5 +145,4 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         except Exception as err:
             _LOGGER.error("Error updating entity state: %s", err)
             self._available = False
-
 

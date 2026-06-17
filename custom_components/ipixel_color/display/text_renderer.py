@@ -3,13 +3,8 @@ from __future__ import annotations
 
 import io
 import logging
-import os
-from pathlib import Path
-from typing import Any, Tuple
-
 from PIL import Image, ImageDraw, ImageFont
 
-from ..color import hex_to_rgb
 from ..fonts import get_font_path
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,7 +14,17 @@ MIN_FONT_SIZE = 4
 MARGIN_THRESHOLD = 64  # Pixel brightness threshold for margin detection
 
 
-def render_text_to_png(text: str, width: int, height: int, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bytes:
+def render_text_to_png(
+    text: str,
+    width: int,
+    height: int,
+    antialias: bool = True,
+    font_size: float | None = None,
+    font: str | None = None,
+    line_spacing: int = 0,
+    text_color: str = "ffffff",
+    bg_color: str = "000000",
+) -> bytes:
     """Render text to PNG image data with color gradient mapping.
 
     Args:
@@ -42,6 +47,19 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
         - 255 (white) → text_color
         - Intermediate values → interpolated colors
     """
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Invalid display dimensions: {width}x{height}")
+
+    _LOGGER.debug(
+        "Rendering textimage canvas=%dx%d font=%s font_size=%s line_spacing=%d antialias=%s",
+        width,
+        height,
+        font or "OpenSans-Light.ttf",
+        f"{font_size:.1f}" if font_size else "auto",
+        line_spacing,
+        antialias,
+    )
+
     # Create image with device dimensions
     # Use 'L' mode (grayscale) for non-antialiased to get sharper pixels
     image_mode = "RGB" if antialias else "1"
@@ -100,7 +118,6 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
         total_height += line_spacing * (len(lines) - 1)
     y_offset = (height - total_height) // 2
 
-    print(line_data)
     # Draw each line with corrected positioning
     current_y = y_offset
     for i, (line, data) in enumerate(zip(lines, line_data)):
@@ -120,8 +137,8 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
     
     # Parse hex colors to RGB tuples using utility function
     try:
-        bg_r, bg_g, bg_b = hex_to_rgb(bg_color)
-        text_r, text_g, text_b = hex_to_rgb(text_color)
+        bg_r, bg_g, bg_b = _hex_to_rgb(bg_color)
+        text_r, text_g, text_b = _hex_to_rgb(text_color)
     except (ValueError, IndexError):
         _LOGGER.error("Invalid color format. Using defaults (white text, black background)")
         bg_r, bg_g, bg_b = 0, 0, 0
@@ -159,7 +176,33 @@ def render_text_to_png(text: str, width: int, height: int, antialias: bool = Tru
     # Convert to PNG bytes
     png_buffer = io.BytesIO()
     rgb_img.save(png_buffer, format='PNG')
+    _LOGGER.debug(
+        "Rendered textimage PNG size=%dx%d payload=%d bytes",
+        width,
+        height,
+        len(png_buffer.getvalue()),
+    )
     return png_buffer.getvalue()
+
+
+def inspect_png(png_data: bytes) -> tuple[int, int, int]:
+    """Return rendered PNG dimensions and raw RGB payload size."""
+    with Image.open(io.BytesIO(png_data)) as image:
+        rgb_image = image.convert("RGB")
+        width, height = rgb_image.size
+        return width, height, len(rgb_image.tobytes())
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert a six-digit hex color to RGB."""
+    normalized = hex_color.lstrip("#")
+    if len(normalized) != 6:
+        raise ValueError(f"Invalid hex color length: {hex_color}")
+    return (
+        int(normalized[0:2], 16),
+        int(normalized[2:4], 16),
+        int(normalized[4:6], 16),
+    )
 
 
 def _calculate_content_bounds(img: Image.Image) -> tuple[int, int, int, int] | None:
@@ -242,11 +285,13 @@ def get_fixed_font(size: float, font_name: str | None = None) -> ImageFont.FreeT
             font_path = get_font_path(font_name)
             if font_path:
                 try:
+                    _LOGGER.debug("Using font file: %s at size %.1f", font_path, size)
                     return ImageFont.truetype(str(font_path), size)
                 except Exception as e:
                     _LOGGER.warning("Could not load custom font %s: %s", font_name, e)
 
         # Use default font if custom font failed or not specified
+        _LOGGER.debug("Using PIL default font at requested size %.1f", size)
         return ImageFont.load_default()
     except Exception as e:
         _LOGGER.warning("Error loading font size %.1f: %s, using default", size, e)
@@ -300,20 +345,23 @@ def get_optimal_font(draw: ImageDraw.Draw, lines: list[str],
     # Try sizes around the theoretical optimal with fine increments
     best_font = None
     best_size = 0.0
-    
-    # Test 3 iterations with refinement
-    test_ranges = [
-        (theoretical_size * 0.7, theoretical_size * 1.3, 2.0),  # Coarse: ±30% with 2.0 step
-        (best_size - 2.0, best_size + 2.0, 0.5),                # Medium: ±2 with 0.5 step  
-        (best_size - 0.5, best_size + 0.5, 0.1),                # Fine: ±0.5 with 0.1 step
-    ]
-    
-    for iteration, (start, end, step) in enumerate(test_ranges):
+
+    for iteration, step in enumerate((2.0, 0.5, 0.1)):
         if iteration > 0 and best_size == 0:
             break  # Skip refinement if no valid size found
+
+        if iteration == 0:
+            start = theoretical_size * 0.7
+            end = theoretical_size * 1.3
+        elif iteration == 1:
+            start = best_size - 2.0
+            end = best_size + 2.0
+        else:
+            start = best_size - 0.5
+            end = best_size + 0.5
             
-        current_start = max(1.0, start if iteration == 0 else start)
-        current_end = min(min(max_height, max_width), end if iteration == 0 else end)
+        current_start = max(1.0, start)
+        current_end = min(min(max_height, max_width), end)
         
         size = current_start
         while size <= current_end:

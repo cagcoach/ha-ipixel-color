@@ -52,3 +52,43 @@ display_text:
       default: [0, 0, 0]
       selector:
         color_rgb:
+display_weather_clock:
+  name: Display Weather Clock
+  description: Render a 96x16 bitmap layout with weather icon, date, clock, and temperature.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+  fields:
+    weather_entity:
+      name: Weather Entity
+      description: Weather entity used for condition and temperature.
+      required: false
+      default: weather.forecast_home
+      selector:
+        entity:
+          domain: weather
+    custom_text:
+      name: Custom Text
+      description: Optional top-row text. If omitted, the Custom Text entity is used; if that is empty, the current date is used.
+      required: false
+      selector:
+        text:
+    font_name:
+      name: Font
+      description: Font file to use for date, time, and temperature.
+      required: false
+      default: 7x5.ttf
+      selector:
+        text:
+    font_size:
+      name: Font Size
+      description: Font size for the weather clock layout.
+      required: false
+      default: 7.5
+      selector:
+        number:
+          min: 4
+          max: 16
+          step: 0.5
+          mode: box

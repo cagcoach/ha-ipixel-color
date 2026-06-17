@@ -7,13 +7,20 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
 from .bluetooth.scanner import discover_ipixel_devices_ha
-from .const import DOMAIN, CONF_ADDRESS
+from .const import (
+    CONF_DISPLAY_HEIGHT,
+    CONF_DISPLAY_WIDTH,
+    DEFAULT_DISPLAY_HEIGHT,
+    DEFAULT_DISPLAY_WIDTH,
+    DOMAIN,
+    CONF_ADDRESS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +67,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for iPIXEL Color."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> iPIXELOptionsFlowHandler:
+        """Create the options flow."""
+        return iPIXELOptionsFlowHandler(config_entry)
 
     def __init__(self):
         """Initialize config flow."""
@@ -191,6 +206,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data_schema=vol.Schema({
                     vol.Required(CONF_ADDRESS): str,
                     vol.Optional(CONF_NAME, default="iPIXEL Display"): str,
+                    **_display_override_schema(),
                 }),
             )
 
@@ -212,7 +228,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             return self.async_create_entry(
                 title=info["title"], 
-                data=user_input
+                data=_clean_display_overrides(user_input)
             )
 
         return self.async_show_form(
@@ -220,6 +236,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({
                 vol.Required(CONF_ADDRESS, default=user_input.get(CONF_ADDRESS, "")): str,
                 vol.Optional(CONF_NAME, default=user_input.get(CONF_NAME, "iPIXEL Display")): str,
+                **_display_override_schema(
+                    user_input.get(CONF_DISPLAY_WIDTH, 0),
+                    user_input.get(CONF_DISPLAY_HEIGHT, 0),
+                ),
             }),
             errors=errors,
         )
@@ -275,3 +295,74 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="bluetooth_confirm",
             description_placeholders=placeholders,
         )
+
+
+class iPIXELOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options for iPIXEL Color."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage display size overrides."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data=_clean_display_overrides(user_input),
+            )
+
+        current_width = self._config_entry.options.get(
+            CONF_DISPLAY_WIDTH,
+            self._config_entry.data.get(CONF_DISPLAY_WIDTH, 0),
+        )
+        current_height = self._config_entry.options.get(
+            CONF_DISPLAY_HEIGHT,
+            self._config_entry.data.get(CONF_DISPLAY_HEIGHT, 0),
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                **_display_override_schema(current_width, current_height),
+            }),
+            description_placeholders={
+                "default_width": str(DEFAULT_DISPLAY_WIDTH),
+                "default_height": str(DEFAULT_DISPLAY_HEIGHT),
+            },
+        )
+
+
+def _display_override_schema(
+    width: int = 0,
+    height: int = 0,
+) -> dict[Any, Any]:
+    """Return schema fields for display size overrides."""
+    return {
+        vol.Optional(CONF_DISPLAY_WIDTH, default=width): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=0, max=512),
+        ),
+        vol.Optional(CONF_DISPLAY_HEIGHT, default=height): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=0, max=128),
+        ),
+    }
+
+
+def _clean_display_overrides(data: dict[str, Any]) -> dict[str, Any]:
+    """Return data with empty display overrides removed."""
+    cleaned = dict(data)
+    width = int(cleaned.get(CONF_DISPLAY_WIDTH) or 0)
+    height = int(cleaned.get(CONF_DISPLAY_HEIGHT) or 0)
+
+    if width > 0 and height > 0:
+        cleaned[CONF_DISPLAY_WIDTH] = width
+        cleaned[CONF_DISPLAY_HEIGHT] = height
+    else:
+        cleaned.pop(CONF_DISPLAY_WIDTH, None)
+        cleaned.pop(CONF_DISPLAY_HEIGHT, None)
+
+    return cleaned

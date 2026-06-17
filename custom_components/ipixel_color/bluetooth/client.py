@@ -144,8 +144,18 @@ class BluetoothClient:
             await self._client.start_notify(NOTIFY_UUID, response_handler)
 
             try:
-                _LOGGER.debug("Sending command: %s", command.hex())
+                _LOGGER.debug(
+                    "Writing BLE command to %s: %d bytes (%s)",
+                    WRITE_UUID,
+                    len(command),
+                    command.hex(),
+                )
                 await self._client.write_gatt_char(WRITE_UUID, command)
+                _LOGGER.debug(
+                    "BLE write succeeded to %s: %d bytes",
+                    WRITE_UUID,
+                    len(command),
+                )
 
                 # Wait for response with short timeout
                 try:
@@ -172,7 +182,12 @@ class BluetoothClient:
 
             return True
         except BleakError as err:
-            _LOGGER.error("Failed to send command: %s", err)
+            _LOGGER.error(
+                "BLE write failed to %s (%d bytes): %s",
+                WRITE_UUID,
+                len(command),
+                err,
+            )
             return False
 
     @property
