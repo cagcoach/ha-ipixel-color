@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -33,6 +34,9 @@ async def async_setup_entry(
     async_add_entities([
         iPIXELTextDisplay(hass, api, entry, address, name),
     ])
+    # Actions (send_mdi_icon, send_text, send_layout, etc.) are registered
+    # once at integration setup in services.py, not here - see
+    # https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/action-setup/
 
 
 class iPIXELTextDisplay(TextEntity, RestoreEntity):
@@ -142,6 +146,206 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         except Exception as err:
             _LOGGER.debug("Could not get auto-update setting: %s", err)
         return False  # Default to manual updates only
+
+    async def async_send_mdi_icon(
+        self,
+        icon: str,
+        color: tuple[int, int, int] = (255, 255, 255),
+        bg_color: tuple[int, int, int] = (0, 0, 0),
+        scale: int = 100,
+        save_slot: int = 0,
+    ) -> None:
+        """Render and display a Home Assistant MDI icon (service: send_mdi_icon).
+
+        Args:
+            icon: MDI icon name, e.g. 'mdi:battery-outline' or 'battery-outline'.
+            color: Icon fill color as an (R, G, B) tuple.
+            bg_color: Canvas background color as an (R, G, B) tuple.
+            scale: Icon size as a percentage of the panel's smaller dimension (1-100).
+            save_slot: If >= 1, saves the icon to that device memory slot.
+        """
+        color_hex = "".join(f"{c:02x}" for c in color)
+        bg_color_hex = "".join(f"{c:02x}" for c in bg_color)
+
+        success = await self._api.send_mdi_icon(
+            icon=icon,
+            color=color_hex,
+            bg_color=bg_color_hex,
+            scale=scale,
+            save_slot=save_slot,
+        )
+        if not success:
+            _LOGGER.error("Failed to send MDI icon '%s'", icon)
+            raise HomeAssistantError(f"Failed to send MDI icon '{icon}' - check the logs for details")
+
+    async def async_send_text(
+        self,
+        text: str,
+        color: tuple[int, int, int] = (255, 255, 255),
+        bg_color: tuple[int, int, int] | None = None,
+        font: str = "CUSONG",
+        animation: int = 0,
+        speed: int = 80,
+        rainbow_mode: int = 0,
+    ) -> None:
+        """Send text using pypixelcolor's native renderer (service: send_text).
+
+        Independent of the entity's stored text/effect/speed/colors (used by
+        the 'Display' text box + auto-update flow) - meant for direct calls
+        from automations/scripts with their own parameters each time.
+
+        Args:
+            text: Text to display (supports emojis).
+            color: Text color as an (R, G, B) tuple.
+            bg_color: Background color as an (R, G, B) tuple, or None for transparent.
+            font: Built-in font name ('CUSONG', 'SIMSUN', 'VCR_OSD_MONO').
+            animation: Animation type (0-7). Note: pypixelcolor itself rejects
+                3 and 4 on panels that aren't 32x32, to avoid a device bootloop.
+            speed: Animation speed (0-100).
+            rainbow_mode: Rainbow color-cycling mode (0-9).
+        """
+        color_hex = "".join(f"{c:02x}" for c in color)
+        bg_color_hex = "".join(f"{c:02x}" for c in bg_color) if bg_color is not None else None
+
+        success = await self._api.display_text_pypixelcolor(
+            text=text,
+            color=color_hex,
+            bg_color=bg_color_hex,
+            font=font,
+            animation=animation,
+            speed=speed,
+            rainbow_mode=rainbow_mode,
+        )
+        if not success:
+            _LOGGER.error("Failed to send text '%s'", text)
+            raise HomeAssistantError(f"Failed to send text '{text}' - check the logs for details")
+
+    async def async_send_test_pattern(self) -> None:
+        """DIAGNOSTIC ONLY: send a 4-quadrant colored test pattern (service: send_test_pattern).
+
+        Used to empirically determine the logical-buffer-to-physical-panel
+        mapping when the device's reported width/height doesn't match the
+        panel's real physical shape.
+        """
+        success = await self._api.send_test_pattern()
+        if not success:
+            _LOGGER.error("Failed to send test pattern")
+            raise HomeAssistantError("Failed to send test pattern - check the logs for details")
+
+    async def async_send_layout(
+        self,
+        icon: str | None = None,
+        icon_x: int = 0,
+        icon_y: int = 0,
+        icon_size: int | None = None,
+        icon_color: tuple[int, int, int] = (255, 255, 255),
+        icon_blink: bool = False,
+        icon_blink_interval_ms: int = 500,
+        icons: list[dict] | None = None,
+        image_path: str | None = None,
+        image_x: int = 0,
+        image_y: int = 0,
+        image_width: int | None = None,
+        image_height: int | None = None,
+        text: str | None = None,
+        text_x: int = 0,
+        text_y: int = 0,
+        text_size: float = 6,
+        text_font: str | None = None,
+        text_color: tuple[int, int, int] = (255, 255, 255),
+        text_wrap: bool = True,
+        text_line_spacing: int = 1,
+        text_align: str = "left",
+        text_scroll: bool = False,
+        text_blink: bool = False,
+        text_blink_interval_ms: int = 500,
+        texts: list[dict] | None = None,
+        scroll_step: int = 2,
+        scroll_frame_ms: int = 80,
+        scroll_gap: int = 16,
+        bg_color: tuple[int, int, int] = (0, 0, 0),
+        save_slot: int = 0,
+    ) -> None:
+        """Compose up to 4 icons, an image, and up to 4 texts (service: send_layout).
+
+        All optional; give at least one. Positions are each element's
+        top-left corner in device pixels. For a single icon use
+        icon/icon_x/...; for more than one (up to 4), use `icons` instead -
+        a list of dicts with the same shape (icon, x, y, size, color_hex,
+        blink, blink_interval_ms) - which takes priority over the flat
+        icon/icon_x/... fields if given. Icons never scroll, but can blink.
+        For a single text use text/text_x/...; for more than one (up to
+        4), use `texts` instead - a list of dicts with the same shape
+        (text, x, y, size, font, color_hex, wrap, align, scroll,
+        line_spacing, blink, blink_interval_ms) - which takes priority
+        over the flat text/text_x/... fields if given. '\\n' in any text
+        always forces a line break; wrap additionally auto-wraps at the
+        panel edge (word-wrapping reflows text and doesn't preserve exact
+        spacing - leave wrap off if you need leading/trailing/internal
+        spaces exactly as given, e.g. for manual alignment); align sets
+        left/right/center alignment within the text's own block; scroll
+        makes text too wide to fit scroll continuously instead (multiple
+        scrolling and/or blinking elements stay in sync with each other).
+        """
+        icon_color_hex = "".join(f"{c:02x}" for c in icon_color)
+        text_color_hex = "".join(f"{c:02x}" for c in text_color)
+        bg_color_hex = "".join(f"{c:02x}" for c in bg_color)
+
+        success = await self._api.send_layout(
+            icon=icon,
+            icon_x=icon_x,
+            icon_y=icon_y,
+            icon_size=icon_size,
+            icon_color=icon_color_hex,
+            icon_blink=icon_blink,
+            icon_blink_interval_ms=icon_blink_interval_ms,
+            icons=icons,
+            image_path=image_path,
+            image_x=image_x,
+            image_y=image_y,
+            image_width=image_width,
+            image_height=image_height,
+            text=text,
+            text_x=text_x,
+            text_y=text_y,
+            text_size=text_size,
+            text_font=text_font,
+            text_color=text_color_hex,
+            text_wrap=text_wrap,
+            text_line_spacing=text_line_spacing,
+            text_align=text_align,
+            text_scroll=text_scroll,
+            text_blink=text_blink,
+            text_blink_interval_ms=text_blink_interval_ms,
+            texts=texts,
+            scroll_step=scroll_step,
+            scroll_frame_ms=scroll_frame_ms,
+            scroll_gap=scroll_gap,
+            bg_color=bg_color_hex,
+            save_slot=save_slot,
+        )
+        if not success:
+            _LOGGER.error("Failed to send layout")
+            raise HomeAssistantError("Failed to send layout - check the logs for details")
+
+    async def async_send_image_file(
+        self,
+        file_path: str,
+        resize_method: str = "crop",
+        save_slot: int = 0,
+    ) -> None:
+        """Send an existing image or GIF file from disk (service: send_image_file).
+
+        The file must be readable by Home Assistant (e.g. under /config/www/).
+        """
+        success = await self._api.send_image_file(
+            file_path=file_path,
+            resize_method=resize_method,
+            save_slot=save_slot,
+        )
+        if not success:
+            _LOGGER.error("Failed to send image file '%s'", file_path)
+            raise HomeAssistantError(f"Failed to send image file '{file_path}' - check the logs for details")
 
     async def async_update(self) -> None:
         """Update the entity state."""

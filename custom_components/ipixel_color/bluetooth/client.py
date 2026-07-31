@@ -19,11 +19,32 @@ from homeassistant.components import bluetooth
 from ..const import WRITE_UUID, NOTIFY_UUID
 from ..exceptions import iPIXELConnectionError
 
+try:
+    from pypixelcolor.lib.transport.send_plan import send_plan as pypixelcolor_send_plan
+    from pypixelcolor.lib.transport.ack_manager import AckManager
+except ImportError:
+    pypixelcolor_send_plan = None
+    AckManager = None
+
 _LOGGER = logging.getLogger(__name__)
 
 
 class BluetoothClient:
-    """Manages Bluetooth connection and communication."""
+    """Manages Bluetooth connection and communication.
+
+    Notification handling: a SINGLE notify subscription is enabled once in
+    connect() and stays active for the whole connection lifetime, exactly
+    matching pypixelcolor's own reference client (DeviceSession), which
+    creates one AckManager at connect() and reuses it for every command
+    without ever stopping/restarting notifications in between.
+
+    An earlier version of this file stopped and restarted notifications
+    around every single send_command()/send_plan() call. That repeated
+    stop/start churn is a likely source of dropped ACKs on real hardware
+    (a notification arriving in the brief window between stop and start
+    would be silently lost) - especially for images, whose multi-chunk
+    transfer depends on ACKs arriving reliably window by window.
+    """
 
     def __init__(self, hass: HomeAssistant, address: str) -> None:
         """Initialize Bluetooth client.
@@ -37,11 +58,39 @@ class BluetoothClient:
         self._client: BleakClientWithServiceCache | None = None
         self._connected = False
         self._notification_handler: Callable | None = None
+        self._ack_mgr = None
+        self._extra_listeners: list[Callable[[Any, bytearray], None]] = []
 
     def _disconnected_callback(self, client: BleakClientWithServiceCache) -> None:
         """Called when device disconnects."""
         _LOGGER.warning("iPIXEL device %s disconnected", self._address)
         self._connected = False
+
+    def _dispatch_notification(self, sender: Any, data: bytearray) -> None:
+        """Single persistent notify callback: fan out to all consumers.
+
+        Called for every notification for the whole connection lifetime.
+        Forwards to: the AckManager (for send_plan's per-window ACKs), any
+        temporary listeners registered by send_command(), and the original
+        handler passed to connect() (currently just debug logging).
+        """
+        if self._ack_mgr is not None:
+            try:
+                self._ack_mgr.make_notify_handler()(sender, data)
+            except Exception as err:
+                _LOGGER.debug("AckManager handler error: %s", err)
+
+        for listener in list(self._extra_listeners):
+            try:
+                listener(sender, data)
+            except Exception as err:
+                _LOGGER.debug("Extra notification listener error: %s", err)
+
+        if self._notification_handler:
+            try:
+                self._notification_handler(sender, data)
+            except Exception as err:
+                _LOGGER.debug("Notification handler error: %s", err)
 
     async def connect(self, notification_handler: Callable[[Any, bytearray], None]) -> bool:
         """Connect to the iPIXEL device.
@@ -81,10 +130,15 @@ class BluetoothClient:
             )
 
             self._connected = True
-
-            # Store and enable notifications
             self._notification_handler = notification_handler
-            await self._client.start_notify(NOTIFY_UUID, notification_handler)
+
+            # Create ONE persistent AckManager for the whole connection, and
+            # enable notifications ONCE via the dispatcher above. Never
+            # stopped/restarted again until disconnect().
+            if AckManager is not None:
+                self._ack_mgr = AckManager()
+
+            await self._client.start_notify(NOTIFY_UUID, self._dispatch_notification)
             _LOGGER.info("Successfully connected to iPIXEL device")
             return True
 
@@ -107,9 +161,15 @@ class BluetoothClient:
             finally:
                 self._connected = False
                 self._client = None  # Don't reuse client - create fresh for next connection
+                self._ack_mgr = None
+                self._extra_listeners = []
 
     async def send_command(self, command: bytes) -> bool:
-        """Send command to the device and log any response.
+        """Send a small, single-packet command and log any response.
+
+        Uses the persistent notification subscription (no stop/start
+        churn): registers a temporary listener in self._extra_listeners
+        for the duration of this call only.
 
         Args:
             command: Command bytes to send
@@ -123,56 +183,116 @@ class BluetoothClient:
         if not self._connected or not self._client:
             raise iPIXELConnectionError("Device not connected")
 
+        response_data = []
+        response_received = asyncio.Event()
+
+        def response_handler(sender: Any, data: bytearray) -> None:
+            response_data.append(bytes(data))
+            response_received.set()
+            _LOGGER.info("Device response: %s", data.hex())
+
+        self._extra_listeners.append(response_handler)
         try:
-            # Set up temporary response capture
-            response_data = []
-            response_received = asyncio.Event()
-
-            def response_handler(sender: Any, data: bytearray) -> None:
-                response_data.append(bytes(data))
-                response_received.set()
-                _LOGGER.info("Device response: %s", data.hex())
-
-            # Stop existing notifications first to avoid "already enabled" error
-            try:
-                await self._client.stop_notify(NOTIFY_UUID)
-            except (KeyError, BleakError) as e:
-                # No callback was registered yet, which is fine
-                _LOGGER.debug("Could not stop notifications (not started): %s", e)
-
-            # Enable notifications to capture response
-            await self._client.start_notify(NOTIFY_UUID, response_handler)
+            _LOGGER.debug("Sending command: %s", command.hex())
+            await self._client.write_gatt_char(WRITE_UUID, command)
 
             try:
-                _LOGGER.debug("Sending command: %s", command.hex())
-                await self._client.write_gatt_char(WRITE_UUID, command)
-
-                # Wait for response with short timeout
-                try:
-                    await asyncio.wait_for(response_received.wait(), timeout=2.0)
-                    if response_data:
-                        _LOGGER.info("Command response received: %s", response_data[-1].hex())
-                    else:
-                        _LOGGER.debug("No response received within timeout")
-                except asyncio.TimeoutError:
-                    _LOGGER.debug("No response received within 2 seconds")
-
-            finally:
-                # Restore the original notification handler
-                try:
-                    await self._client.stop_notify(NOTIFY_UUID)
-                except (KeyError, BleakError) as e:
-                    _LOGGER.debug("Could not stop notifications in cleanup: %s", e)
-
-                if self._notification_handler:
-                    try:
-                        await self._client.start_notify(NOTIFY_UUID, self._notification_handler)
-                    except BleakError as e:
-                        _LOGGER.warning("Could not restart original notification handler: %s", e)
+                await asyncio.wait_for(response_received.wait(), timeout=2.0)
+                if response_data:
+                    _LOGGER.info("Command response received: %s", response_data[-1].hex())
+                else:
+                    _LOGGER.debug("No response received within timeout")
+            except asyncio.TimeoutError:
+                _LOGGER.debug("No response received within 2 seconds")
 
             return True
         except BleakError as err:
             _LOGGER.error("Failed to send command: %s", err)
+            return False
+        finally:
+            if response_handler in self._extra_listeners:
+                self._extra_listeners.remove(response_handler)
+
+    async def send_command_wait_response(self, command: bytes, timeout: float = 5.0) -> bytes | None:
+        """Send a command and return the raw response bytes, if any arrive.
+
+        Same persistent-notification mechanism as send_command(), but
+        returns the response payload instead of a bool - for callers that
+        need to parse it (e.g. device info queries).
+
+        Args:
+            command: Command bytes to send.
+            timeout: How long to wait for a response, in seconds.
+
+        Returns:
+            The response bytes, or None if no response arrived in time.
+
+        Raises:
+            iPIXELConnectionError: If not connected.
+        """
+        if not self._connected or not self._client:
+            raise iPIXELConnectionError("Device not connected")
+
+        response_data = []
+        response_received = asyncio.Event()
+
+        def response_handler(sender: Any, data: bytearray) -> None:
+            response_data.append(bytes(data))
+            response_received.set()
+
+        self._extra_listeners.append(response_handler)
+        try:
+            await self._client.write_gatt_char(WRITE_UUID, command)
+            try:
+                await asyncio.wait_for(response_received.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                _LOGGER.debug("No response received within %.1f seconds", timeout)
+                return None
+            return response_data[-1] if response_data else None
+        finally:
+            if response_handler in self._extra_listeners:
+                self._extra_listeners.remove(response_handler)
+
+    async def send_plan(self, plan, ack_timeout: float = 8.0) -> bool:
+        """Send a pypixelcolor SendPlan using the library's own transport.
+
+        Uses the persistent AckManager created in connect() (no stop/start
+        of notifications): each window is split into plan.chunk_size (244)
+        byte chunks, and a per-window ACK is awaited via the AckManager
+        before continuing. Needed for any multi-byte payload (currently:
+        images).
+
+        Args:
+            plan: A pypixelcolor SendPlan object (e.g. from send_image_hex).
+            ack_timeout: How long to wait for each window's ACK, in
+                seconds. pypixelcolor's own default (8s) is tuned for small
+                payloads; a complex GIF may need noticeably longer for the
+                device to process before it acks - callers sending images/
+                GIFs should pass a higher value (e.g. 20-30s).
+
+        Returns:
+            True if the plan was sent and acknowledged successfully.
+
+        Raises:
+            iPIXELConnectionError: If not connected.
+            ImportError: If pypixelcolor is not available.
+        """
+        if pypixelcolor_send_plan is None:
+            raise ImportError("pypixelcolor library is not installed")
+        if not self._connected or not self._client:
+            raise iPIXELConnectionError("Device not connected")
+        if self._ack_mgr is None:
+            raise iPIXELConnectionError("AckManager not initialized - not connected?")
+
+        try:
+            result = await pypixelcolor_send_plan(
+                self._client, plan, self._ack_mgr, ack_timeout=ack_timeout,
+            )
+            if not result.success:
+                _LOGGER.error("send_plan '%s' failed: %s", plan.id, result.message)
+            return result.success
+        except Exception as err:
+            _LOGGER.error("Error sending plan '%s': %s", plan.id, err)
             return False
 
     @property

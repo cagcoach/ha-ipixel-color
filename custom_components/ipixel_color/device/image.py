@@ -15,9 +15,16 @@ def make_image_command(
     image_bytes: bytes,
     file_extension: str = ".png",
     resize_method: str = "crop",
-    device_info_dict: Optional[dict] = None
-) -> list[bytes]:
-    """Build image display command using pypixelcolor.
+    device_info_dict: Optional[dict] = None,
+    save_slot: int = 0,
+):
+    """Build an image SendPlan using pypixelcolor.
+
+    Returns the raw SendPlan (not extracted command bytes): image payloads
+    can exceed a single BLE packet, so they must be sent via
+    BluetoothClient.send_plan(), which chunks each window per
+    pypixelcolor's own protocol (244-byte chunks + per-window ACK) rather
+    than a single unchunked write.
 
     Args:
         image_bytes: Raw image data bytes (PNG, GIF, JPEG, etc.)
@@ -26,9 +33,11 @@ def make_image_command(
                       'crop' will fill the entire target area and crop excess
                       'fit' will fit the entire image with black padding
         device_info_dict: Device information dict from api.get_device_info()
+        save_slot: If >= 1, saves the image to that device memory slot.
 
     Returns:
-        List of command bytes (one per window/frame)
+        A pypixelcolor SendPlan object, to be passed to
+        BluetoothClient.send_plan().
 
     Raises:
         ImportError: If pypixelcolor is not available
@@ -59,12 +68,8 @@ def make_image_command(
         hex_string=hex_string,
         file_extension=file_extension,
         resize_method=resize_method,
-        device_info=device_info
+        device_info=device_info,
+        save_slot=save_slot,
     )
 
-    # Extract command bytes from all windows
-    commands = []
-    for window in send_plan.windows:
-        commands.append(window.data)
-
-    return commands
+    return send_plan

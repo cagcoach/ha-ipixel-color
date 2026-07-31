@@ -52,3 +52,509 @@ display_text:
       default: [0, 0, 0]
       selector:
         color_rgb:
+
+send_mdi_icon:
+  name: Send MDI Icon
+  description: Renders a Home Assistant MDI icon (fetched from @mdi/svg) and displays it on the iPIXEL panel.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+  fields:
+    icon:
+      name: Icon
+      description: MDI icon name, e.g. "mdi:battery-outline" or "battery-outline"
+      required: true
+      example: "mdi:weather-sunny"
+      selector:
+        icon:
+    color:
+      name: Icon Color
+      description: Icon fill color
+      required: false
+      default: [255, 255, 255]
+      selector:
+        color_rgb:
+    bg_color:
+      name: Background Color
+      description: Canvas background color
+      required: false
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
+    scale:
+      name: Icon Size
+      description: Icon size as a percentage of the panel's smaller dimension
+      required: false
+      default: 100
+      selector:
+        number:
+          min: 10
+          max: 100
+          mode: slider
+          unit_of_measurement: "%"
+    save_slot:
+      name: Save Slot
+      description: Device memory slot to save the icon to (0 = don't save)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+
+send_text:
+  name: Send Text
+  description: >-
+    Sends text using pypixelcolor's native text renderer, with its own
+    text/color/animation parameters each call - independent of the panel's
+    currently selected text/effect/speed/colors. Intended for use from
+    automations and scripts.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+  fields:
+    text:
+      name: Text
+      description: Text to display (supports emojis)
+      required: true
+      example: "Hello World"
+      selector:
+        text:
+    color:
+      name: Text Color
+      description: Text color
+      required: false
+      default: [255, 255, 255]
+      selector:
+        color_rgb:
+    bg_color:
+      name: Background Color
+      description: Background color. Leave unset for a transparent background.
+      required: false
+      selector:
+        color_rgb:
+    font:
+      name: Font
+      description: Built-in font
+      required: false
+      default: "CUSONG"
+      selector:
+        select:
+          options:
+            - "CUSONG"
+            - "SIMSUN"
+            - "VCR_OSD_MONO"
+    animation:
+      name: Animation
+      description: >-
+        Animation type (0-7), as defined by pypixelcolor itself. Values 3
+        and 4 are automatically rejected by the library on panels that
+        aren't 32x32, to avoid a device bootloop.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 7
+    speed:
+      name: Speed
+      description: Animation speed (0-100)
+      required: false
+      default: 80
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+    rainbow_mode:
+      name: Rainbow Mode
+      description: Rainbow color-cycling mode (0-9, 0 = disabled)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 9
+
+send_test_pattern:
+  name: "[DIAGNOSTICO] Send Test Pattern"
+  description: >-
+    Invia un pattern a 4 quadranti colorati (rosso/verde/blu/giallo) delle
+    dimensioni riportate dal device, per capire empiricamente come il
+    buffer logico si dispone sul pannello fisico. Da rimuovere una volta
+    chiarita la mappatura.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+
+send_layout:
+  name: Send Layout
+  description: >-
+    Compone un'icona MDI, un'immagine e/o fino a 4 testi, ciascuno
+    posizionabile indipendentemente (angolo in alto a sinistra), e li
+    invia come un'unica immagine al pannello.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+  fields:
+    icon:
+      name: Icon
+      description: Icona MDI, es. "mdi:battery-outline". Omettere per non mostrarne una.
+      required: false
+      example: "mdi:weather-sunny"
+      selector:
+        icon:
+    icon_x:
+      name: Icon X
+      description: Posizione X (angolo in alto a sinistra dell'icona), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    icon_y:
+      name: Icon Y
+      description: Posizione Y (angolo in alto a sinistra dell'icona), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    icon_size:
+      name: Icon Size
+      description: Dimensione icona in pixel (quadrata). Se omesso, usa la dimensione minore del pannello.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 999
+    icon_color:
+      name: Icon Color
+      description: Colore dell'icona
+      required: false
+      default: [255, 255, 255]
+      selector:
+        color_rgb:
+    icon_blink:
+      name: Icon Blink
+      description: Se attivo, l'icona lampeggia (accesa/spenta a intervalli)
+      required: false
+      default: false
+      selector:
+        boolean:
+    icon_blink_interval_ms:
+      name: Icon Blink Interval
+      description: Durata di ogni stato (acceso o spento) del lampeggio, in millisecondi
+      required: false
+      default: 500
+      selector:
+        number:
+          min: 50
+          max: 5000
+    icons:
+      name: Icons (multiple)
+      description: >-
+        Lista di fino a 4 icone MDI indipendenti (ciascuna con la propria
+        posizione/dimensione/colore/lampeggio), utilizzabile solo da
+        YAML. Se presente, ha priorità sui campi icon/icon_x/ecc. sopra.
+        Formato di ogni elemento: icon (obbligatorio), x, y, size,
+        color_hex, blink, blink_interval_ms. Non scorrono mai, ma possono
+        lampeggiare.
+      required: false
+      example: |
+        - icon: "mdi:weather-sunny"
+          x: 0
+          y: 0
+          size: 16
+        - icon: "mdi:water-alert"
+          x: 20
+          y: 0
+          size: 16
+          blink: true
+          blink_interval_ms: 300
+      selector:
+        object:
+    image_path:
+      name: Image Path
+      description: >-
+        Percorso assoluto di un file immagine/GIF da inserire (solo il
+        primo frame se è animata), leggibile da Home Assistant (es.
+        sotto /config/www/). Omettere per non inserirne una.
+      required: false
+      example: "/config/www/logo.png"
+      selector:
+        text:
+    image_x:
+      name: Image X
+      description: Posizione X (angolo in alto a sinistra dell'immagine), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    image_y:
+      name: Image Y
+      description: Posizione Y (angolo in alto a sinistra dell'immagine), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    image_width:
+      name: Image Width
+      description: Se impostato, ridimensiona l'immagine a questa larghezza in pixel
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 999
+    image_height:
+      name: Image Height
+      description: Se impostato, ridimensiona l'immagine a questa altezza in pixel
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 999
+    text:
+      name: Text
+      description: Testo da mostrare. Omettere per non mostrarne uno.
+      required: false
+      example: "21°C"
+      selector:
+        text:
+    text_x:
+      name: Text X
+      description: Posizione X (angolo in alto a sinistra del testo), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    text_y:
+      name: Text Y
+      description: Posizione Y (angolo in alto a sinistra del testo), in pixel
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 999
+    text_size:
+      name: Text Size
+      description: Dimensione font in pixel (anche frazionaria) - scala il testo dinamicamente
+      required: false
+      default: 6
+      selector:
+        number:
+          min: 1
+          max: 64
+          step: 0.5
+    text_font:
+      name: Text Font
+      description: >-
+        Font bundlato. "3x5-de" è il più piccolo disponibile. "Lepidos" è
+        un font pixel 3x7 (CC0/pubblico dominio) - dà risultati migliori
+        a dimensioni multiple di 16 (16, 32...).
+      required: false
+      selector:
+        select:
+          options:
+            - "3x5-de"
+            - "5x5"
+            - "7x5"
+            - "Lepidos"
+            - "OpenSans-Light"
+            - "WP7xn"
+    text_color:
+      name: Text Color
+      description: Colore del testo
+      required: false
+      default: [255, 255, 255]
+      selector:
+        color_rgb:
+    text_wrap:
+      name: Text Wrap
+      description: >-
+        Se attivo (default), va a capo automaticamente quando il testo
+        supera il bordo destro del pannello. "\n" nel testo forza comunque
+        un a-capo indipendentemente da questa opzione. Nota: il wrap
+        ridistribuisce le parole e non preserva spazi esatti - disattivalo
+        se ti servono spazi iniziali/finali/interni precisi (es. per
+        allineamento manuale).
+      required: false
+      default: true
+      selector:
+        boolean:
+    text_align:
+      name: Text Align
+      description: >-
+        Allineamento orizzontale del testo entro il proprio blocco:
+        "left" (default), "right" o "center". Conta soprattutto con più
+        righe (separate da "\n") di larghezza diversa.
+      required: false
+      default: "left"
+      selector:
+        select:
+          options:
+            - "left"
+            - "right"
+            - "center"
+    text_line_spacing:
+      name: Text Line Spacing
+      description: Spazio verticale extra tra le righe, in pixel
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 20
+    text_scroll:
+      name: Text Scroll
+      description: >-
+        Se attivo, il testo troppo largo per stare nello spazio disponibile
+        scorre in loop continuo (GIF animata) invece di essere tagliato.
+        Nessun effetto se il testo entra già. Per ridurre il tempo di
+        trasferimento su GIF pesanti, aumenta scroll_step (meno frame).
+      required: false
+      default: false
+      selector:
+        boolean:
+    text_blink:
+      name: Text Blink
+      description: Se attivo, il testo lampeggia (acceso/spento a intervalli)
+      required: false
+      default: false
+      selector:
+        boolean:
+    text_blink_interval_ms:
+      name: Text Blink Interval
+      description: Durata di ogni stato (acceso o spento) del lampeggio, in millisecondi
+      required: false
+      default: 500
+      selector:
+        number:
+          min: 50
+          max: 5000
+    texts:
+      name: Texts (multipli)
+      description: >-
+        Lista di fino a 4 testi indipendenti (ciascuno con la propria
+        posizione/dimensione/font/colore/wrap/align/scroll/lampeggio),
+        utilizzabile solo da YAML. Se presente, ha priorità sui campi
+        text/text_x/ecc. sopra. Formato di ogni elemento: text
+        (obbligatorio), x, y, size, font, color_hex, wrap, align, scroll,
+        line_spacing, blink, blink_interval_ms.
+      required: false
+      example: |
+        - text: "Salotto"
+          x: 0
+          y: 0
+          size: 6
+        - text: "21°C"
+          x: 0
+          y: 8
+          size: 8
+          scroll: true
+        - text: "ALLARME"
+          x: 0
+          y: 16
+          size: 8
+          blink: true
+          blink_interval_ms: 300
+      selector:
+        object:
+    scroll_step:
+      name: Scroll Speed
+      description: >-
+        Pixel di spostamento per frame, condiviso da tutti i testi in
+        scorrimento (più alto = più veloce ma meno fluido)
+      required: false
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 20
+    scroll_frame_ms:
+      name: Scroll Frame Duration
+      description: Durata di ogni frame dell'animazione, in millisecondi
+      required: false
+      default: 80
+      selector:
+        number:
+          min: 20
+          max: 1000
+    scroll_gap:
+      name: Scroll Gap
+      description: Pixel vuoti tra la fine di un giro e l'inizio del successivo
+      required: false
+      default: 16
+      selector:
+        number:
+          min: 0
+          max: 200
+    bg_color:
+      name: Background Color
+      description: Colore di sfondo del pannello
+      required: false
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
+    save_slot:
+      name: Save Slot
+      description: Slot di memoria del device in cui salvare (0 = non salvare)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+
+send_image_file:
+  name: Send Image File
+  description: >-
+    Invia un file immagine o GIF già esistente e leggibile da Home
+    Assistant (es. sotto /config/www/). Supporta PNG, GIF (incluse GIF
+    animate, inviate così come sono), JPEG, BMP, TIFF, WEBP, HEIC/HEIF.
+  target:
+    entity:
+      integration: ipixel_color
+      domain: text
+  fields:
+    file_path:
+      name: File Path
+      description: Percorso assoluto del file, es. /config/www/mia_animazione.gif
+      required: true
+      example: "/config/www/mia_animazione.gif"
+      selector:
+        text:
+    resize_method:
+      name: Resize Method
+      description: >-
+        "crop" riempie il pannello e taglia l'eccesso, "fit" adatta
+        l'intera immagine con bordi neri
+      required: false
+      default: "crop"
+      selector:
+        select:
+          options:
+            - "crop"
+            - "fit"
+    save_slot:
+      name: Save Slot
+      description: Slot di memoria del device in cui salvare (0 = non salvare)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 10
