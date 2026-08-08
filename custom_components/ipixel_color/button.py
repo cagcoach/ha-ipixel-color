@@ -113,10 +113,10 @@ class iPIXELSyncTimeButton(ButtonEntity):
         """Handle button press to sync time."""
         _LOGGER.debug("Manual time sync triggered")
         try:
-            # Connect if needed
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device for time sync")
-                await self._api.connect()
+            # Connect if needed (reconnect-aware)
+            if not await self._api.ensure_connected():
+                _LOGGER.error("Cannot sync time: device %s not connected", self._api.address)
+                return
 
             # Sync time
             success = await self._api.sync_time()
