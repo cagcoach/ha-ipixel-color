@@ -35,9 +35,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise ConfigEntryNotReady(f"Failed to connect to iPIXEL device at {address}")
         
         _LOGGER.info("Successfully connected to iPIXEL device %s", address)
-        
+
         # Get device info for sensors
         await api.get_device_info()
+
+        # Start the reconnect watcher so the link recovers automatically
+        # if the panel drops its BLE connection later.
+        await api.start_watcher()
         
     except iPIXELTimeoutError as err:
         _LOGGER.error("Connection timeout to iPIXEL device %s: %s", address, err)

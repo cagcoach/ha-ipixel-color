@@ -171,10 +171,10 @@ async def _update_textimage_mode(hass: HomeAssistant, device_name: str, api, tex
         bg_color = get_color_from_light_entity(hass, api._address, "background_color", default="000000")
         _LOGGER.debug("Background color: #%s", bg_color)
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for display update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot update display: device %s not connected", api.address)
+            return False
 
         # Resolve templates and process escape sequences
         template_resolved = await resolve_template_variables(hass, text)
@@ -222,10 +222,10 @@ async def _update_clock_mode(hass: HomeAssistant, device_name: str, api) -> bool
         if show_date is None:
             show_date = True  # Default to showing date
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for clock mode update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot update clock: device %s not connected", api.address)
+            return False
 
         # Send clock mode command
         success = await api.set_clock_mode(
@@ -318,10 +318,10 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         if rainbow_mode is None:
             rainbow_mode = 0  # Default to no rainbow
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for text mode update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot send text: device %s not connected", api.address)
+            return False
 
         # Resolve templates and process escape sequences
         template_resolved = await resolve_template_variables(hass, text)

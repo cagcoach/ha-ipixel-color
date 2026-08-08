@@ -83,10 +83,10 @@ class iPIXELSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
         try:
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device before turning on")
-                await self._api.connect()
-            
+            if not await self._api.ensure_connected():
+                _LOGGER.error("Cannot turn on: device %s not connected", self._api.address)
+                return
+
             success = await self._api.set_power(True)
             if success:
                 self._is_on = True
@@ -103,10 +103,10 @@ class iPIXELSwitch(SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
         try:
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device before turning off")
-                await self._api.connect()
-            
+            if not await self._api.ensure_connected():
+                _LOGGER.error("Cannot turn off: device %s not connected", self._api.address)
+                return
+
             success = await self._api.set_power(False)
             if success:
                 self._is_on = False
