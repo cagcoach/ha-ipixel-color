@@ -22,9 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Options flow to override the panel size the firmware reports (upstream PR #38).
 - Local brand icons in `custom_components/ipixel_color/brand/` for Home Assistant 2026.3 and newer (from upstream PR #47 by @frenck).
 - Unit tests and a GitHub Actions workflow that runs them.
+- HACS and Hassfest validation, automatic GitHub releases on a manifest version bump, and Dependabot.
 
 ### Changed
 - Minimum Home Assistant version is now 2024.12.
+- Pillow is no longer listed as a requirement (it ships with Home Assistant).
 - Documentation and issue tracker now point to this fork.
 
 ## [0.1.0] - 2024-11-19
