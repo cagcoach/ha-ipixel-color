@@ -8,6 +8,7 @@ from math import floor
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
 
 from .bluetooth.client import BluetoothClient
 from .device.commands import (
@@ -20,6 +21,7 @@ from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .exceptions import iPIXELConnectionError
+from .const import OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,18 +29,36 @@ _LOGGER = logging.getLogger(__name__)
 class iPIXELAPI:
     """iPIXEL Color device API client - simplified facade."""
 
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        address: str,
+        entry: "ConfigEntry | None" = None,
+    ) -> None:
         """Initialize the API client.
 
         Args:
             hass: Home Assistant instance
             address: Bluetooth MAC address
+            entry: Config entry holding integration options (dimension overrides, etc.)
         """
         self._address = address
+        self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
         self._power_state = False
         self._device_info: dict[str, Any] | None = None
         self._device_response: bytes | None = None
+
+    def _resolved_dimensions(self, base_info: dict[str, Any]) -> tuple[int, int]:
+        """Return (width, height) honoring options-flow overrides if set."""
+        if self._entry is None:
+            return base_info["width"], base_info["height"]
+        options = self._entry.options
+        if not options.get(OPT_OVERRIDE_DIMENSIONS):
+            return base_info["width"], base_info["height"]
+        width = options.get(OPT_PANEL_WIDTH) or base_info["width"]
+        height = options.get(OPT_PANEL_HEIGHT) or base_info["height"]
+        return width, height
         
     async def connect(self) -> bool:
         """Connect to the iPIXEL device."""
@@ -223,10 +243,10 @@ class iPIXELAPI:
             bg_color: Background color in hex format (e.g., '000000')
         """
         try:
-            # Get device dimensions
-            device_info = await self.get_device_info()
-            width = device_info["width"]
-            height = device_info["height"]
+            # Get device dimensions (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            width, height = self._resolved_dimensions(base_info)
+            device_info = {**base_info, "width": width, "height": height}
 
             # Render text to PNG with color gradient
             png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing, text_color, bg_color)
@@ -293,9 +313,9 @@ class iPIXELAPI:
             True if text was sent successfully
         """
         try:
-            # Get device info for height
-            device_info = await self.get_device_info()
-            device_height = device_info["height"]
+            # Get device info for height (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            _, device_height = self._resolved_dimensions(base_info)
 
             if font_size > device_height:
                 font_size = device_height

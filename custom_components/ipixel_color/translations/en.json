@@ -38,6 +38,19 @@
       "unknown": "Unknown error occurred."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iPIXEL Color options",
+        "description": "Some panels (e.g. the 32x32 B.K. Light sold at Action) advertise wrong dimensions over Bluetooth. Enable the override and provide the actual physical dimensions if your panel renders incorrectly.",
+        "data": {
+          "override_dimensions": "Override panel dimensions",
+          "panel_width": "Panel width (pixels, 0 = use firmware-reported)",
+          "panel_height": "Panel height (pixels, 0 = use firmware-reported)"
+        }
+      }
+    }
+  },
   "entity": {
     "switch": {
       "power": {

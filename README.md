@@ -141,7 +141,7 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 
 ## Technical
 
-- Requires: Home Assistant 2024.1+ and HACS
+- Requires: Home Assistant 2024.12+ and HACS
 
 ## Acknowledgments
 
