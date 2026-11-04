@@ -3,6 +3,17 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A4747U9)
 
 A Home Assistant custom integration for iPIXEL Color LED matrix displays via Bluetooth.
+
+> This is a maintained fork of [cagcoach/ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color), which has been inactive since December 2025. It collects fixes and contributions from that repo's open pull requests. The integration domain (`ipixel_color`) is unchanged, so your devices, entities and settings carry over.
+>
+> **Switching from the original repository in HACS:**
+> 1. In HACS, remove (uninstall) the iPIXEL Color download. This deletes only the files in `custom_components/ipixel_color`; the config entry, devices and entities stay in Home Assistant.
+> 2. In HACS's custom repositories list, delete `https://github.com/cagcoach/ha-ipixel-color`.
+> 3. Add `https://github.com/scyto/ha-ipixel-color-font-jsons` as a custom repository of type Integration, then download it.
+> 4. Restart Home Assistant.
+>
+> Leaving both repositories in HACS lets them overwrite each other's files in `custom_components/ipixel_color`.
+
 These displays have been recently available as B.K. Light LED Pixel Board from Action and thus get increasing popularity.
 
 ## Features
@@ -26,7 +37,7 @@ These displays have been recently available as B.K. Light LED Pixel Board from A
 1. Open HACS in Home Assistant
 2. Click on the three dots in the top right corner
 3. Select **Custom repositories**
-4. Add the repository URL: `https://github.com/cagcoach/ha-ipixel-color`
+4. Add the repository URL: `https://github.com/scyto/ha-ipixel-color-font-jsons`
 5. Select **Integration** as the category
 6. Click **Add**
 7. Search for "iPIXEL Color" in HACS and install it
@@ -130,7 +141,7 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 
 ## Technical
 
-- Requires: Home Assistant 2024.1+ and HACS
+- Requires: Home Assistant 2024.12+ and HACS
 
 ## Acknowledgments
 

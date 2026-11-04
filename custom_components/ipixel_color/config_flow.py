@@ -13,7 +13,13 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
 from .bluetooth.scanner import discover_ipixel_devices_ha
-from .const import DOMAIN, CONF_ADDRESS
+from .const import (
+    DOMAIN,
+    CONF_ADDRESS,
+    OPT_OVERRIDE_DIMENSIONS,
+    OPT_PANEL_WIDTH,
+    OPT_PANEL_HEIGHT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +70,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize config flow."""
         self._discovered_devices: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> "OptionsFlowHandler":
+        """Get the options flow for this handler."""
+        return OptionsFlowHandler()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -274,4 +287,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="bluetooth_confirm",
             description_placeholders=placeholders,
+        )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle an options flow for iPIXEL Color.
+
+    NOTE: do NOT define __init__(self, config_entry) and assign to
+    self.config_entry — on modern HA (2024.12+), `config_entry` is a
+    read-only property automatically populated by the framework, so
+    overriding it raises ``AttributeError: ... has no setter``.
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    OPT_OVERRIDE_DIMENSIONS,
+                    default=current.get(OPT_OVERRIDE_DIMENSIONS, False),
+                ): bool,
+                vol.Optional(
+                    OPT_PANEL_WIDTH,
+                    default=current.get(OPT_PANEL_WIDTH, 0),
+                ): vol.All(int, vol.Range(min=0, max=512)),
+                vol.Optional(
+                    OPT_PANEL_HEIGHT,
+                    default=current.get(OPT_PANEL_HEIGHT, 0),
+                ): vol.All(int, vol.Range(min=0, max=512)),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
         )

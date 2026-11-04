@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("Setting up iPIXEL Color for %s (%s)", name, address)
     
     # Create API instance with hass for Bluetooth proxy support
-    api = iPIXELAPI(hass, address)
+    api = iPIXELAPI(hass, address, entry=entry)
     
     # Test connection
     try:
@@ -55,10 +55,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = api
     entry.runtime_data = api
-    
+
+    # Reload the entry whenever options change (e.g. dimension overrides)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
+
     return True
 
 
@@ -80,6 +83,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    """Reload config entry through the config entry manager.
+
+    Calling unload/setup directly skipped the entry's unload callbacks, so
+    every options save added another update listener.
+    """
+    await hass.config_entries.async_reload(entry.entry_id)

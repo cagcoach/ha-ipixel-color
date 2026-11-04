@@ -4,6 +4,7 @@ Bluetooth hardware."""
 from __future__ import annotations
 
 import asyncio
+import datetime
 import enum
 import sys
 import types
@@ -261,6 +262,10 @@ _ha.components.text = _module(
 sys.modules["homeassistant.components.text"] = _ha.components.text
 sys.modules["homeassistant.components"] = _ha.components
 sys.modules["homeassistant.helpers"] = _ha.helpers
+_ha.util = _module("homeassistant.util")
+_ha.util.dt = _module("homeassistant.util.dt", now=datetime.datetime.now)
+sys.modules["homeassistant.util"] = _ha.util
+sys.modules["homeassistant.util.dt"] = _ha.util.dt
 sys.modules["homeassistant"] = _ha
 
 # The bluetooth component is the only one we genuinely need at runtime; it is

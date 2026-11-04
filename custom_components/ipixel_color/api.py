@@ -6,9 +6,11 @@ import logging
 import time
 from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
+from math import floor
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.components import bluetooth
 
@@ -23,6 +25,7 @@ from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .exceptions import iPIXELConnectionError, iPIXELError
+from .const import OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,15 +37,22 @@ RECONNECT_BACKOFF_MAX = 30.0
 class iPIXELAPI:
     """iPIXEL Color device API client - simplified facade."""
 
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        address: str,
+        entry: "ConfigEntry | None" = None,
+    ) -> None:
         """Initialize the API client.
 
         Args:
             hass: Home Assistant instance
             address: Bluetooth MAC address
+            entry: Config entry holding integration options (dimension overrides, etc.)
         """
         self._hass = hass
         self._address = address
+        self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
         self._bluetooth.on_disconnect = self._on_disconnect
         self._power_state = False
@@ -57,6 +67,17 @@ class iPIXELAPI:
         self._last_reconnect_attempt = 0.0
         self._unsubscribe_bluetooth: Callable | None = None
         self._watcher_started = False
+
+    def _resolved_dimensions(self, base_info: dict[str, Any]) -> tuple[int, int]:
+        """Return (width, height) honoring options-flow overrides if set."""
+        if self._entry is None:
+            return base_info["width"], base_info["height"]
+        options = self._entry.options
+        if not options.get(OPT_OVERRIDE_DIMENSIONS):
+            return base_info["width"], base_info["height"]
+        width = options.get(OPT_PANEL_WIDTH) or base_info["width"]
+        height = options.get(OPT_PANEL_HEIGHT) or base_info["height"]
+        return width, height
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -372,10 +393,10 @@ class iPIXELAPI:
             bg_color: Background color in hex format (e.g., '000000')
         """
         try:
-            # Get device dimensions
-            device_info = await self.get_device_info()
-            width = device_info["width"]
-            height = device_info["height"]
+            # Get device dimensions (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            width, height = self._resolved_dimensions(base_info)
+            device_info = {**base_info, "width": width, "height": height}
 
             # Render text to PNG with color gradient
             png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing, text_color, bg_color)
@@ -423,7 +444,8 @@ class iPIXELAPI:
         font: str = "CUSONG",
         animation: int = 0,
         speed: int = 80,
-        rainbow_mode: int = 0
+        rainbow_mode: int = 0,
+        font_size: int = 16
     ) -> bool:
         """Display text using pypixelcolor.
 
@@ -435,14 +457,21 @@ class iPIXELAPI:
             animation: Animation type (0-7)
             speed: Animation speed (0-100)
             rainbow_mode: Rainbow mode (0-9)
+            font_size: Font size (16, 32, 48, 64) defaults to 16
 
         Returns:
             True if text was sent successfully
         """
         try:
-            # Get device info for height
-            device_info = await self.get_device_info()
-            device_height = device_info["height"]
+            # Get device info for height (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            _, device_height = self._resolved_dimensions(base_info)
+
+            if font_size > device_height:
+                font_size = device_height
+            if font_size < 16:
+                font_size = 16
+            char_height = floor(font_size / 16) * 16
 
             # Generate text commands using pypixelcolor
             commands = make_text_command(
@@ -454,7 +483,7 @@ class iPIXELAPI:
                 speed=speed,
                 rainbow_mode=rainbow_mode,
                 save_slot=0,
-                device_height=device_height
+                char_height=char_height
             )
 
             # Send all command frames

@@ -2,6 +2,6 @@
   "name": "iPIXEL Color",
   "zip_release": false,
   "hide_default_branch": false,
-  "homeassistant": "2024.1.0",
+  "homeassistant": "2024.12.0",
   "hacs": "1.32.0"
 }
