@@ -81,7 +81,9 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         
         # Restore last state if available
         last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state:
+        # An empty string is a valid saved value; only unknown/unavailable
+        # mean there is nothing to restore.
+        if last_state is not None and last_state.state not in ("unknown", "unavailable"):
             self._current_text = last_state.state
             _LOGGER.debug("Restored text state: %s", self._current_text)
 
