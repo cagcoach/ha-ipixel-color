@@ -20,7 +20,7 @@ def make_text_command(
     speed: int = 80,
     rainbow_mode: int = 0,
     save_slot: int = 0,
-    device_height: Optional[int] = None
+    char_height: Optional[int] = None
 ) -> list[bytes]:
     """Build text display command using pypixelcolor.
 
@@ -33,7 +33,7 @@ def make_text_command(
         speed: Animation speed (0-100)
         rainbow_mode: Rainbow mode (0-9)
         save_slot: Save slot (0-255)
-        device_height: Device height in pixels (auto-detected if None)
+        char_height: Character height in pixels (auto-detected if None)
 
     Returns:
         List of command bytes (one per window/frame)
@@ -55,7 +55,7 @@ def make_text_command(
         speed=speed,
         rainbow_mode=rainbow_mode,
         save_slot=save_slot,
-        char_height=device_height
+        char_height=char_height
     )
 
     # Extract command bytes from all windows
