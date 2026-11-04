@@ -43,7 +43,44 @@ AVAILABLE_MODES = [
     MODE_CLOCK,
 ]
 
-DEFAULT_MODE = MODE_TEXT_IMAGE
+DEFAULT_MODE = MODE_TEXT
+
+# Defaults for a new install (restored values win after that).
+DEFAULT_FONT = "unifont.otf"  # pypixelcolor 0.5 built-in (GNU Unifont)
+DEFAULT_FONT_SIZE = 16.0
+DEFAULT_TEXT_RAINBOW = 1
+DEFAULT_TEXT = "HomeAssistant!"
+
+# Text-mode animations (pypixelcolor send_text, documented at
+# https://lucagoc.fr/pypixelcolor/main/commands/content/). Shown as
+# "<number> <name>" so the protocol value stays visible.
+TEXT_ANIMATIONS = {
+    0: "Static",
+    1: "Scroll left",
+    2: "Scroll right",
+    3: "Scroll up",
+    4: "Scroll down",
+    5: "Blink",
+    6: "Fade",
+    7: "Snowflake",
+}
+TEXT_ANIMATION_OPTIONS = [f"{value} {label}" for value, label in TEXT_ANIMATIONS.items()]
+DEFAULT_TEXT_ANIMATION = TEXT_ANIMATION_OPTIONS[1]  # 1 Scroll left
+
+
+def text_animation_value(option: str | None) -> int:
+    """Return the animation number for a select option such as "1 Scroll left"."""
+    try:
+        value = int(str(option).split(" ", 1)[0])
+    except (TypeError, ValueError):
+        return 0
+    return value if value in TEXT_ANIMATIONS else 0
+
+
+def text_animation_option(value: int) -> str:
+    """Return the select option for an animation number."""
+    return TEXT_ANIMATION_OPTIONS[value] if value in TEXT_ANIMATIONS else TEXT_ANIMATION_OPTIONS[0]
+
 
 # Text mode renders the font only at multiples of 16 rows, up to the panel
 # height (16 and 20 look the same on a 20-row panel).
