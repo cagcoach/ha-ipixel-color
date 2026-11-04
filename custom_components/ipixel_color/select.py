@@ -12,9 +12,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.restore_state import async_get as async_get_restore_data
 
 from .api import iPIXELAPI
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE, TEXT_SIZE_STEP, text_mode_sizes
+from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE, TEXT_SIZE_STEP, text_mode_sizes, text_size_from_font_size
 from .common import get_entity_id_by_unique_id
 from .common import update_ipixel_display
 from .fonts import get_available_fonts
@@ -337,6 +339,31 @@ class iPIXELTextSizeSelect(SelectEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in self._attr_options:
             self._attr_current_option = last_state.state
+            return
+        if last_state is None:
+            migrated = self._size_from_old_font_size()
+            if migrated is not None:
+                self._attr_current_option = str(migrated)
+
+    def _size_from_old_font_size(self) -> int | None:
+        """On upgrade, carry over what the old Font Size drew in text mode."""
+        entity_id = er.async_get(self.hass).async_get_entity_id(
+            "number", DOMAIN, f"{self._address}_font_size"
+        )
+        if entity_id is None:
+            return None
+        try:
+            data = async_get_restore_data(self.hass)
+            getter = getattr(data, "async_get_stored_state", None)
+            stored = getter(entity_id) if getter else data.last_states.get(entity_id)
+            value = stored.state.state if stored is not None else None
+        except Exception:  # noqa: BLE001 - restore internals differ by HA version
+            return None
+        sizes = [int(option) for option in self._attr_options]
+        size = text_size_from_font_size(value, sizes)
+        if size is not None:
+            _LOGGER.info("Text Size set to %s from the previous Font Size", size)
+        return size
 
     @property
     def current_option(self) -> str | None:

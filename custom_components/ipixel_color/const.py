@@ -55,3 +55,19 @@ def text_mode_sizes(panel_height: int | None) -> list[int]:
     if not isinstance(panel_height, int) or panel_height < TEXT_SIZE_STEP:
         return [TEXT_SIZE_STEP]
     return list(range(TEXT_SIZE_STEP, panel_height // TEXT_SIZE_STEP * TEXT_SIZE_STEP + 1, TEXT_SIZE_STEP))
+
+
+def text_size_from_font_size(value, sizes: list[int]) -> int | None:
+    """Map a legacy Font Size value onto the nearest drawable text size.
+
+    Text mode drew at floor(size / 16) * 16 rows, clamped to the panel, so
+    this keeps what upgrading users already see. Returns None if unparsable.
+    """
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not sizes:
+        return None
+    rows = int(size // TEXT_SIZE_STEP) * TEXT_SIZE_STEP
+    return min(max(rows, sizes[0]), sizes[-1])
