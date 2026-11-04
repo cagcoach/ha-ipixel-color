@@ -29,5 +29,5 @@
     "bleak-retry-connector>=3.5.0",
     "pypixelcolor==0.5.0"
   ],
-  "version": "0.2.1"
+  "version": "0.2.2"
 }
