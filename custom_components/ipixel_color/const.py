@@ -46,7 +46,7 @@ AVAILABLE_MODES = [
 DEFAULT_MODE = MODE_TEXT
 
 # Defaults for a new install (restored values win after that).
-DEFAULT_FONT = "CUSONG.ttf"
+DEFAULT_FONT = "unifont.otf"  # pypixelcolor 0.5 built-in (GNU Unifont)
 DEFAULT_FONT_SIZE = 16.0
 DEFAULT_TEXT_RAINBOW = 1
 DEFAULT_TEXT = "HomeAssistant!"

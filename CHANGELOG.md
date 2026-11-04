@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- New installs start in `text` mode with the CUSONG font, font size 16 (the smallest text mode renders), Text Rainbow 1 and the text "HomeAssistant!". Existing installs keep their restored settings.
+- New installs start in `text` mode with the Unifont font (pypixelcolor 0.5's built-in; needs the pypixelcolor 0.5 update), font size 16 (the smallest text mode renders), Text Rainbow 1 and the text "HomeAssistant!". Existing installs keep their restored settings.
 
 ## [0.2.1] - 2026-11-04
 
