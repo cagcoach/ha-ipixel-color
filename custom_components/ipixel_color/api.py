@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from typing import Any, TYPE_CHECKING
 
@@ -51,6 +52,9 @@ class iPIXELAPI:
         # Serializes reconnect attempts and guards the watcher bookkeeping.
         self._reconnect_lock = asyncio.Lock()
         self._reconnect_task: asyncio.Task | None = None
+        # Set by a fresh advertisement to cut a running backoff short.
+        self._reconnect_wakeup = asyncio.Event()
+        self._last_reconnect_attempt = 0.0
         self._unsubscribe_bluetooth: Callable | None = None
         self._watcher_started = False
 
@@ -108,9 +112,16 @@ class iPIXELAPI:
                     delay,
                 )
                 while not self.is_connected:
-                    await asyncio.sleep(delay)
+                    self._reconnect_wakeup.clear()
+                    try:
+                        await asyncio.wait_for(
+                            self._reconnect_wakeup.wait(), timeout=delay
+                        )
+                    except asyncio.TimeoutError:
+                        pass
                     if not self._watcher_started:
                         return
+                    self._last_reconnect_attempt = time.monotonic()
                     if await self.ensure_connected():
                         _LOGGER.info("Reconnected to iPIXEL device %s", self._address)
                         return
@@ -143,8 +154,18 @@ class iPIXELAPI:
         ) -> None:
             # The panel is advertising again; if we are not connected, bring
             # the link back immediately instead of waiting for the backoff.
-            if not self.is_connected:
-                self._schedule_reconnect()
+            if self.is_connected:
+                return
+            if self._reconnect_task is not None and not self._reconnect_task.done():
+                # A backoff is running: retry now, but no more often than the
+                # shortest backoff, since advertisements arrive every second.
+                if (
+                    time.monotonic() - self._last_reconnect_attempt
+                    >= RECONNECT_BACKOFF_START
+                ):
+                    self._reconnect_wakeup.set()
+                return
+            self._schedule_reconnect()
 
         self._unsubscribe_bluetooth = bluetooth.async_register_callback(
             self._hass,
