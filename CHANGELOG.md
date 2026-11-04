@@ -10,11 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Pin `pypixelcolor` to 0.4.0. Version 0.5.0 (2026-09-08) removed the CUSONG, SIMSUN and VCR_OSD_MONO fonts that text mode uses by default, so fresh installs pulled an incompatible library.
 - `manifest.json` version now matches the release (was still 0.1.0).
+- Device info (panel size, type) failed on local BlueZ adapters with "Notify acquired", so panels were treated as 64x16. Notifications are now subscribed once per connection and shared by all commands.
+- The 64x16 fallback is no longer kept after a failed device-info query; it is retried after the next reconnect.
+- Long payloads are written in acknowledged chunks sized to the connection MTU (max 244 bytes), so long text no longer gets dropped through Bluetooth proxies (upstream #28, #12).
+- Commands are serialized so chunks from two entities never interleave.
+- The panel reconnects automatically after a dropped link (from upstream PR #44 by @arcdrake22).
+- Clock sync uses Home Assistant's configured time zone instead of the host's (upstream PR #32).
 
 ### Added
+- Font size option in text mode (upstream PR #35).
+- Options flow to override the panel size the firmware reports (upstream PR #38).
 - Local brand icons in `custom_components/ipixel_color/brand/` for Home Assistant 2026.3 and newer (from upstream PR #47 by @frenck).
+- Unit tests and a GitHub Actions workflow that runs them.
 
 ### Changed
+- Minimum Home Assistant version is now 2024.12.
 - Documentation and issue tracker now point to this fork.
 
 ## [0.1.0] - 2024-11-19

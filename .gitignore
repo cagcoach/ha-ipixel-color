@@ -192,3 +192,5 @@ test_font_rendering.py
 
 # Claude Code specific
 .claude/
+# Unit tests live in tests/ and must be committed
+!tests/test_*.py
