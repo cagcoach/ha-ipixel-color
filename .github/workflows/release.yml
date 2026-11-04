@@ -23,6 +23,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # tags, to check an existing tag's commit
 
       - name: Read version
         id: version
@@ -65,9 +67,20 @@ jobs:
             echo "$TAG is already released; nothing to do."
             exit 0
           fi
+          # A tag left behind by a deleted release would be reused as is, and
+          # --target ignored, so the release could point at an older commit.
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            tagged=$(git rev-parse "$TAG^{commit}")
+            if [[ "$tagged" != "$GITHUB_SHA" ]]; then
+              echo "::error::Tag $TAG exists at $tagged, not $GITHUB_SHA. Delete the tag or bump the version."
+              exit 1
+            fi
+          fi
           flags=()
-          # A version with letters in it (0.3.0b1, 1.0.0rc1) is a pre-release.
-          [[ "$VERSION" =~ [a-zA-Z] ]] && flags+=(--prerelease)
+          # Stable only when the version (ignoring +build metadata) is plain
+          # X.Y.Z; anything else (0.3.0b1, 1.0.0rc1, 1.0.0-0) is a pre-release.
+          core="${VERSION%%+*}"
+          [[ "$core" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || flags+=(--prerelease)
           if ! gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" \
               --notes-file notes.md "${flags[@]}"; then
             # Another run for the same version may have just released it.
