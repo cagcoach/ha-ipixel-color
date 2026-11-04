@@ -79,6 +79,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    """Reload config entry through the config entry manager.
+
+    Calling unload/setup directly skipped the entry's unload callbacks, so
+    every options save added another update listener.
+    """
+    await hass.config_entries.async_reload(entry.entry_id)
