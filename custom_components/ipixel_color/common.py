@@ -5,7 +5,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, DEFAULT_MODE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
         # Get current mode
         mode = await _get_entity_setting(hass, device_name, "select", "mode_select", str, api._address)
         if not mode:
-            mode = MODE_TEXT_IMAGE  # Default to textimage mode
+            mode = DEFAULT_MODE
 
         _LOGGER.debug("Updating display in mode: %s", mode)
 

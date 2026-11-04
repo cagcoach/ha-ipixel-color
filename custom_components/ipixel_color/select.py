@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE
+from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE, DEFAULT_FONT
 from .common import get_entity_id_by_unique_id
 from .common import update_ipixel_display
 from .fonts import get_available_fonts
@@ -63,7 +63,7 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
 
         # Get available fonts from all locations
         self._attr_options = get_available_fonts()
-        self._attr_current_option = "OpenSans-Light.ttf" if "OpenSans-Light.ttf" in self._attr_options else self._attr_options[0]
+        self._attr_current_option = DEFAULT_FONT if DEFAULT_FONT in self._attr_options else self._attr_options[0]
         
         # Device info for grouping in device registry
         self._attr_device_info = DeviceInfo(

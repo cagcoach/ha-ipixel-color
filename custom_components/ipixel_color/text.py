@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI, iPIXELConnectionError
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
+from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, DEFAULT_TEXT
 from .common import get_entity_id_by_unique_id
 from .common import resolve_template_variables, update_ipixel_display
 
@@ -57,7 +57,7 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Display"
         self._attr_unique_id = f"{address}_text_display"
-        self._current_text = ""
+        self._current_text = DEFAULT_TEXT
         self._available = True
         
         # Store current settings (could be exposed as additional entities later)
