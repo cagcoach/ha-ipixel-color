@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Device info (panel size, type) failed on local BlueZ adapters with "Notify acquired", so panels were treated as 64x16. Notifications are now subscribed once per connection and shared by all commands.
+- The 64x16 fallback is no longer kept after a failed device-info query; it is retried after the next reconnect.
+- Long payloads are written in acknowledged chunks sized to the connection MTU (max 244 bytes), so long text no longer gets dropped through Bluetooth proxies (upstream #28, #12).
+- Commands are serialized so chunks from two entities never interleave.
+- The panel reconnects automatically after a dropped link (from upstream PR #44 by @arcdrake22).
+
+### Added
+- Unit tests and a GitHub Actions workflow that runs them.
+
 ## [0.1.0] - 2024-11-19
 
 ### Added

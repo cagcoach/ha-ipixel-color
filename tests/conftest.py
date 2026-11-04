@@ -74,19 +74,32 @@ class FakeBleakClient:
         self.fail_write = False
         self.fail_write_and_drop = False
         self.drop_after_write = False
+        self.mtu_size = 247
+        self.auto_reply: bytes | None = None
+        self.notifying = False
 
     @property
     def is_connected(self) -> bool:
         return self._connected
 
     async def start_notify(self, uuid: str, handler) -> None:
+        if self.notifying:
+            # BlueZ refuses a second subscription on the same characteristic.
+            raise BleakError("[org.bluez.Error.NotPermitted] Notify acquired")
+        self.notifying = True
         self.started_notify.append(uuid)
         self.notify_handler = handler
 
     async def stop_notify(self, uuid: str) -> None:
+        self.notifying = False
         self.stopped_notify.append(uuid)
 
-    async def write_gatt_char(self, uuid: str, data: bytes) -> None:
+    def notify(self, data: bytes) -> None:
+        """Simulate a notification from the panel."""
+        if self.notifying and self.notify_handler:
+            self.notify_handler("fa03", bytearray(data))
+
+    async def write_gatt_char(self, uuid: str, data: bytes, response: bool = False) -> None:
         if self.fail_write_and_drop:
             # Simulate a write that kills the link (raises and disconnects).
             self._connected = False
@@ -96,6 +109,8 @@ class FakeBleakClient:
         if self.fail_write:
             raise BleakError("write failed")
         self.written.append((uuid, bytes(data)))
+        if self.auto_reply is not None:
+            asyncio.get_running_loop().call_soon(self.notify, self.auto_reply)
         if self.drop_after_write:
             self._connected = False
             if self._disconnected_callback:

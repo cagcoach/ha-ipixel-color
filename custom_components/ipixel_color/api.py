@@ -21,7 +21,7 @@ from .device.text import make_text_command
 from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
-from .exceptions import iPIXELConnectionError
+from .exceptions import iPIXELConnectionError, iPIXELError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ class iPIXELAPI:
         self._bluetooth.on_disconnect = self._on_disconnect
         self._power_state = False
         self._device_info: dict[str, Any] | None = None
-        self._device_response: bytes | None = None
+        self._device_info_fallback: dict[str, Any] | None = None
+        self._fallback_connection_id: int | None = None
         # Serializes reconnect attempts and guards the watcher bookkeeping.
         self._reconnect_lock = asyncio.Lock()
         self._reconnect_task: asyncio.Task | None = None
@@ -289,55 +290,40 @@ class iPIXELAPI:
             return False
 
     async def get_device_info(self) -> dict[str, Any] | None:
-        """Query device information and store it."""
+        """Query device information and store it.
+
+        If the panel does not answer, default values (64x16) are returned
+        but not kept, so the query is retried after the next reconnect
+        instead of the wrong size sticking until Home Assistant restarts.
+        """
         if self._device_info is not None:
             return self._device_info
+        if self._device_info_fallback is not None and self._fallback_connection_id == (
+            self._bluetooth.connection_count
+        ):
+            return self._device_info_fallback
         if not await self.ensure_connected():
             _LOGGER.warning("Cannot read device info: %s not connected", self._address)
             return None
 
         try:
-            command = build_device_info_command()
-
-            # Set up notification response
-            self._device_response = None
-            response_received = asyncio.Event()
-
-            def response_handler(sender: Any, data: bytearray) -> None:
-                self._device_response = bytes(data)
-                response_received.set()
-
-            # Enable notifications temporarily
-            await self._bluetooth._client.start_notify(
-                "0000fa03-0000-1000-8000-00805f9b34fb", response_handler
+            response = await self._bluetooth.request(
+                build_device_info_command(), timeout=5.0
             )
-
-            try:
-                # Send command
-                await self._bluetooth._client.write_gatt_char(
-                    "0000fa02-0000-1000-8000-00805f9b34fb", command
-                )
-
-                # Wait for response (5 second timeout)
-                await asyncio.wait_for(response_received.wait(), timeout=5.0)
-
-                if self._device_response:
-                    self._device_info = parse_device_response(self._device_response)
-                else:
-                    raise Exception("No response received")
-
-            finally:
-                await self._bluetooth._client.stop_notify(
-                    "0000fa03-0000-1000-8000-00805f9b34fb"
-                )
-
+            if not response:
+                raise iPIXELError("No response received")
+            self._device_info = parse_device_response(response)
+            self._device_info_fallback = None
             _LOGGER.info("Device info retrieved: %s", self._device_info)
             return self._device_info
 
         except Exception as err:
-            _LOGGER.error("Failed to get device info: %s", err)
-            # Return default values
-            self._device_info = {
+            _LOGGER.error(
+                "Failed to get device info from %s, using 64x16 defaults: %s",
+                self._address,
+                err,
+            )
+            self._device_info_fallback = {
                 "width": 64,
                 "height": 16,
                 "device_type": 0,
@@ -348,7 +334,9 @@ class iPIXELAPI:
                 "has_wifi": False,
                 "password_flag": 255
             }
-            return self._device_info
+            # Only reuse the defaults for this connection; retry after a reconnect.
+            self._fallback_connection_id = self._bluetooth.connection_count
+            return self._device_info_fallback
 
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bool:
         """Display text as image using PIL and pypixelcolor with color gradient mapping.
