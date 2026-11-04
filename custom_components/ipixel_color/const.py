@@ -80,3 +80,31 @@ def text_animation_value(option: str | None) -> int:
 def text_animation_option(value: int) -> str:
     """Return the select option for an animation number."""
     return TEXT_ANIMATION_OPTIONS[value] if value in TEXT_ANIMATIONS else TEXT_ANIMATION_OPTIONS[0]
+
+
+# Text mode renders the font only at multiples of 16 rows, up to the panel
+# height (16 and 20 look the same on a 20-row panel).
+TEXT_SIZE_STEP = 16
+
+
+def text_mode_sizes(panel_height: int | None) -> list[int]:
+    """Return the text-mode font sizes a panel of this height can draw."""
+    if not isinstance(panel_height, int) or panel_height < TEXT_SIZE_STEP:
+        return [TEXT_SIZE_STEP]
+    return list(range(TEXT_SIZE_STEP, panel_height // TEXT_SIZE_STEP * TEXT_SIZE_STEP + 1, TEXT_SIZE_STEP))
+
+
+def text_size_from_font_size(value, sizes: list[int]) -> int | None:
+    """Map a legacy Font Size value onto the nearest drawable text size.
+
+    Text mode drew at floor(size / 16) * 16 rows, clamped to the panel, so
+    this keeps what upgrading users already see. Returns None if unparsable.
+    """
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not sizes:
+        return None
+    rows = int(size // TEXT_SIZE_STEP) * TEXT_SIZE_STEP
+    return min(max(rows, sizes[0]), sizes[-1])

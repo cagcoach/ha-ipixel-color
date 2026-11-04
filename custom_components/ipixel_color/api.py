@@ -334,6 +334,13 @@ class iPIXELAPI:
             _LOGGER.error("Error setting clock mode: %s", err)
             return False
 
+    async def panel_height(self) -> int | None:
+        """Return the panel height, honoring the options-flow override."""
+        info = await self.get_device_info()
+        if not info:
+            return None
+        return self._resolved_dimensions(info)[1]
+
     async def get_device_info(self) -> dict[str, Any] | None:
         """Query device information and store it.
 
