@@ -16,8 +16,17 @@ permissions:
 # No shared concurrency group: GitHub keeps only one pending run per group, so
 # a queued version could be skipped. Each run releases its own commit's version.
 jobs:
+  validate:
+    # Same HACS and Hassfest checks as validate.yml; a failing check blocks
+    # the release instead of racing it.
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+
   release:
     name: Tag and release
+    needs: validate
     runs-on: ubuntu-latest
     # A manual run can pick any branch; only main ever releases.
     if: github.ref == 'refs/heads/main'

@@ -7,6 +7,8 @@ on:
   schedule:
     - cron: "0 0 * * 0"
   workflow_dispatch:
+  # Release runs this first and only publishes when it passes.
+  workflow_call:
 
 permissions:
   contents: read
