@@ -43,4 +43,68 @@ AVAILABLE_MODES = [
     MODE_CLOCK,
 ]
 
-DEFAULT_MODE = MODE_TEXT_IMAGE
+DEFAULT_MODE = MODE_TEXT
+
+# Defaults for a new install (restored values win after that).
+DEFAULT_FONT = "unifont.otf"  # pypixelcolor 0.5 built-in (GNU Unifont)
+DEFAULT_FONT_SIZE = 16.0
+DEFAULT_TEXT_RAINBOW = 1
+DEFAULT_TEXT = "HomeAssistant!"
+
+# Text-mode animations (pypixelcolor send_text, documented at
+# https://lucagoc.fr/pypixelcolor/main/commands/content/). Shown as
+# "<number> <name>" so the protocol value stays visible.
+TEXT_ANIMATIONS = {
+    0: "Static",
+    1: "Scroll left",
+    2: "Scroll right",
+    3: "Scroll up",
+    4: "Scroll down",
+    5: "Blink",
+    6: "Fade",
+    7: "Snowflake",
+}
+TEXT_ANIMATION_OPTIONS = [f"{value} {label}" for value, label in TEXT_ANIMATIONS.items()]
+DEFAULT_TEXT_ANIMATION = TEXT_ANIMATION_OPTIONS[1]  # 1 Scroll left
+
+
+def text_animation_value(option: str | None) -> int:
+    """Return the animation number for a select option such as "1 Scroll left"."""
+    try:
+        value = int(str(option).split(" ", 1)[0])
+    except (TypeError, ValueError):
+        return 0
+    return value if value in TEXT_ANIMATIONS else 0
+
+
+def text_animation_option(value: int) -> str:
+    """Return the select option for an animation number."""
+    return TEXT_ANIMATION_OPTIONS[value] if value in TEXT_ANIMATIONS else TEXT_ANIMATION_OPTIONS[0]
+
+
+# Text mode renders the font only at multiples of 16 rows, up to the panel
+# height (16 and 20 look the same on a 20-row panel).
+TEXT_SIZE_STEP = 16
+
+
+def text_mode_sizes(panel_height: int | None) -> list[int]:
+    """Return the text-mode font sizes a panel of this height can draw."""
+    if not isinstance(panel_height, int) or panel_height < TEXT_SIZE_STEP:
+        return [TEXT_SIZE_STEP]
+    return list(range(TEXT_SIZE_STEP, panel_height // TEXT_SIZE_STEP * TEXT_SIZE_STEP + 1, TEXT_SIZE_STEP))
+
+
+def text_size_from_font_size(value, sizes: list[int]) -> int | None:
+    """Map a legacy Font Size value onto the nearest drawable text size.
+
+    Text mode drew at floor(size / 16) * 16 rows, clamped to the panel, so
+    this keeps what upgrading users already see. Returns None if unparsable.
+    """
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not sizes:
+        return None
+    rows = int(size // TEXT_SIZE_STEP) * TEXT_SIZE_STEP
+    return min(max(rows, sizes[0]), sizes[-1])

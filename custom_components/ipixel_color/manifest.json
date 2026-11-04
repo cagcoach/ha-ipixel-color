@@ -17,10 +17,10 @@
   "dependencies": [
     "bluetooth"
   ],
-  "documentation": "https://github.com/scyto/ha-ipixel-color-font-jsons",
+  "documentation": "https://github.com/scyto/ha-ipixel-color",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/scyto/ha-ipixel-color-font-jsons/issues",
+  "issue_tracker": "https://github.com/scyto/ha-ipixel-color/issues",
   "loggers": [
     "custom_components.ipixel_color"
   ],

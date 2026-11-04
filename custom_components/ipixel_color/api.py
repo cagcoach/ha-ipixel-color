@@ -56,7 +56,10 @@ class iPIXELAPI:
         self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
         self._bluetooth.on_disconnect = self._on_disconnect
-        self._power_state = False
+        # The panel has no power-state query. It is on whenever it has power
+        # and accepts a connection, so start from on; the power switch
+        # restores the last state it set when Home Assistant restarts.
+        self._power_state = True
         self._device_info: dict[str, Any] | None = None
         self._device_info_fallback: dict[str, Any] | None = None
         self._fallback_connection_id: int | None = None
@@ -332,6 +335,13 @@ class iPIXELAPI:
             _LOGGER.error("Error setting clock mode: %s", err)
             return False
 
+    async def panel_height(self) -> int | None:
+        """Return the panel height, honoring the options-flow override."""
+        info = await self.get_device_info()
+        if not info:
+            return None
+        return self._resolved_dimensions(info)[1]
+
     async def get_device_info(self) -> dict[str, Any] | None:
         """Query device information and store it.
 
@@ -533,6 +543,10 @@ class iPIXELAPI:
     def power_state(self) -> bool:
         """Return current power state."""
         return self._power_state
+
+    def restore_power_state(self, on: bool) -> None:
+        """Seed the cached power state from Home Assistant's last known state."""
+        self._power_state = on
 
     @property
     def address(self) -> str:

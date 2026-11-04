@@ -5,7 +5,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, DEFAULT_MODE, TEXT_SIZE_STEP, text_animation_value
 from .fonts import get_font_path
 
 _LOGGER = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
         # Get current mode
         mode = await _get_entity_setting(hass, device_name, "select", "mode_select", str, api._address)
         if not mode:
-            mode = MODE_TEXT_IMAGE  # Default to textimage mode
+            mode = DEFAULT_MODE
 
         _LOGGER.debug("Updating display in mode: %s", mode)
 
@@ -303,9 +303,8 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         _LOGGER.debug("Text mode - text color: #%s", color)
 
         # Animation - need new number entity
-        animation = await _get_entity_setting(hass, device_name, "number", "text_animation", int, api._address)
-        if animation is None:
-            animation = 0  # Default to no animation
+        animation_option = await _get_entity_setting(hass, device_name, "select", "text_animation_select", str, api._address)
+        animation = text_animation_value(animation_option)
 
         # Speed - need new number entity
         speed = await _get_entity_setting(hass, device_name, "number", "text_speed", int, api._address)
@@ -313,10 +312,10 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             speed = 80  # Default speed
 
         # Font size - need new number entity
-        font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float, api._address)
-        if font_size is None:
-            font_size = 16  # Default font_size
-        font_size = int(font_size)
+        # Text mode has its own size select (multiples of 16 the panel can draw)
+        font_size = await _get_entity_setting(hass, device_name, "select", "text_size_select", int, api._address)
+        if not font_size:
+            font_size = TEXT_SIZE_STEP
 
         # Rainbow mode - need new number entity
         rainbow_mode = await _get_entity_setting(hass, device_name, "number", "text_rainbow", int, api._address)
