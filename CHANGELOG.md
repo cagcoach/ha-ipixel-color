@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- MCU Version and WiFi Version sensors are disabled by default on new installs. pypixelcolor 0.4.0 does not decode them, so they always showed "unknown". Existing installs keep them until you disable them on the device page.
+
 ### Fixed
 - The font list was scanned inside the event loop at setup, which Home Assistant reports as a blocking call. It is now scanned in the executor.
 - The power switch showed off after setup even though the panel was on. The panel cannot report its power state, so the switch now starts on and restores its last state after a Home Assistant restart.
