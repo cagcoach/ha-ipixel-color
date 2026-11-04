@@ -64,3 +64,12 @@ def test_bad_json_falls_back_to_defaults(tmp_path):
 def test_text_command_builds_with_05(font):
     commands = make_text_command("HomeAssistant!", font=font, animation=1, rainbow_mode=1, char_height=16)
     assert commands and all(isinstance(c, (bytes, bytearray)) for c in commands)
+
+
+def test_non_mapping_metrics_entry_falls_back(tmp_path):
+    font = tmp_path / "Weird.ttf"
+    font.write_bytes((FONTS / "5x5.ttf").read_bytes())
+    (tmp_path / "Weird.json").write_text(json.dumps({"metrics": {"16": "invalid"}}))
+    cfg = resolve_text_font(str(font), 16)
+    assert cfg.pixel_threshold == 70
+    assert cfg.font_size == 16

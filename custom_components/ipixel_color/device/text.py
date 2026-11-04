@@ -45,7 +45,11 @@ def _sidecar_metrics(font_path: Path, char_height: int) -> dict[str, Any] | None
     if not metrics:
         return None
     closest = min(metrics, key=lambda h: abs(h - char_height))
-    return metrics[closest]
+    chosen = metrics[closest]
+    if not isinstance(chosen, dict):
+        _LOGGER.warning("Ignoring invalid font metrics for height %s in %s", closest, json_path)
+        return None
+    return chosen
 
 
 def _is_builtin_font_file(path: Path) -> bool:
