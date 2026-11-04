@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
+from .fonts import set_config_fonts_dir
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +26,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     name = entry.data[CONF_NAME]
     
     _LOGGER.debug("Setting up iPIXEL Color for %s (%s)", name, address)
+
+    # User fonts live in <config>/fonts so HACS updates don't wipe them.
+    set_config_fonts_dir(hass.config.path("fonts"))
     
     # Create API instance with hass for Bluetooth proxy support
     api = iPIXELAPI(hass, address, entry=entry)

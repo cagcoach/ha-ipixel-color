@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move to `pypixelcolor` 0.5.0. Its built-in text font is now GNU Unifont (SIL OFL 1.1, includes CJK); 0.5.0 dropped CUSONG, SIMSUN and VCR_OSD_MONO because they were not freely licensed. Text mode uses Unifont when no font is selected or the selected file is missing.
 - Text mode now finds the selected font in every font location (this integration's `fonts/`, pypixelcolor's, and system font folders), not only `fonts/`.
 - Per-height font metrics in a `<font>.json` file next to the font are still honoured. pypixelcolor 0.5 stopped reading them, so the integration now does.
+- User fonts can go in `/config/fonts/`, which HACS updates don't touch. It is searched first, before the integration's bundled `fonts/`.
 - Text rendering runs in an executor instead of on the event loop.
 
  - 2026-11-04
