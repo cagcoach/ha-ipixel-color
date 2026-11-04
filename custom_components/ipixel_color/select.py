@@ -14,7 +14,20 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE, DEFAULT_FONT
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.restore_state import async_get as async_get_restore_data
+
+from .const import (
+    DOMAIN,
+    CONF_ADDRESS,
+    CONF_NAME,
+    AVAILABLE_MODES,
+    DEFAULT_MODE,
+    DEFAULT_FONT,
+    DEFAULT_TEXT_ANIMATION,
+    TEXT_ANIMATION_OPTIONS,
+    text_animation_option,
+)
 from .common import get_entity_id_by_unique_id
 from .common import update_ipixel_display
 from .fonts import get_available_fonts
@@ -32,11 +45,15 @@ async def async_setup_entry(
     name = entry.data[CONF_NAME]
     
     api = hass.data[DOMAIN][entry.entry_id]
-    
+
+    # Scanning the font folders is file I/O, which must not run in the event loop.
+    fonts = await hass.async_add_executor_job(get_available_fonts)
+
     async_add_entities([
-        iPIXELFontSelect(hass, api, entry, address, name),
+        iPIXELFontSelect(hass, api, entry, address, name, fonts),
         iPIXELModeSelect(hass, api, entry, address, name),
         iPIXELClockStyleSelect(hass, api, entry, address, name),
+        iPIXELTextAnimationSelect(hass, api, entry, address, name),
     ])
 
 
@@ -48,8 +65,9 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         hass: HomeAssistant,
         api: iPIXELAPI, 
         entry: ConfigEntry, 
-        address: str, 
-        name: str
+        address: str,
+        name: str,
+        fonts: list[str],
     ) -> None:
         """Initialize the font select."""
         self.hass = hass
@@ -61,8 +79,8 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_font_select"
         self._attr_entity_description = "Select font for text display"
 
-        # Get available fonts from all locations
-        self._attr_options = get_available_fonts()
+        # Fonts found in all locations, scanned in the executor at setup
+        self._attr_options = fonts
         self._attr_current_option = DEFAULT_FONT if DEFAULT_FONT in self._attr_options else self._attr_options[0]
         
         # Device info for grouping in device registry
@@ -277,6 +295,134 @@ class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
                     await update_ipixel_display(self.hass, self._name, self._api)
                     _LOGGER.debug("Auto-update triggered display refresh due to clock style change")
         except Exception as err:
+            _LOGGER.debug("Could not trigger auto-update: %s", err)
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return True
+
+
+class iPIXELTextAnimationSelect(SelectEntity, RestoreEntity):
+    """Text-mode animation, shown as "<number> <name>" (e.g. "1 Scroll left").
+
+    Replaces the earlier 0-7 Text Animation number entity; its last value is
+    carried over the first time this select is added.
+    """
+
+    _attr_icon = "mdi:animation"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: iPIXELAPI,
+        entry: ConfigEntry,
+        address: str,
+        name: str
+    ) -> None:
+        """Initialize the text animation select."""
+        self.hass = hass
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Text Animation"
+        self._attr_unique_id = f"{address}_text_animation_select"
+        self._attr_options = TEXT_ANIMATION_OPTIONS
+        self._attr_current_option = DEFAULT_TEXT_ANIMATION
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="iPIXEL",
+            model="LED Matrix Display",
+            sw_version="1.0",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last animation, or migrate it from the old number entity."""
+        await super().async_added_to_hass()
+
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            self._attr_current_option = last_state.state
+            self._remove_old_number()
+            return
+        migrated, readable = self._migrate_from_number()
+        if migrated is not None:
+            self._attr_current_option = migrated
+        if readable:
+            # Only drop the old number once its value was read (or it had none),
+            # so a restore-API change can never lose the user's setting.
+            self._remove_old_number()
+
+    def _old_number_entity_id(self) -> str | None:
+        registry = er.async_get(self.hass)
+        return registry.async_get_entity_id(
+            "number", DOMAIN, f"{self._address}_text_animation"
+        )
+
+    def _migrate_from_number(self) -> tuple[str | None, bool]:
+        """Read the old number entity's last value as a select option.
+
+        Returns (option, readable). readable is False when the restore data
+        could not be read, in which case the old entity must be kept.
+        """
+        entity_id = self._old_number_entity_id()
+        if entity_id is None:
+            return None, True
+        try:
+            data = async_get_restore_data(self.hass)
+            getter = getattr(data, "async_get_stored_state", None)
+            if getter is not None:
+                stored = getter(entity_id)
+            else:
+                stored = data.last_states.get(entity_id)
+        except Exception:  # noqa: BLE001 - restore internals differ by HA version
+            _LOGGER.warning("Could not read stored state of %s; keeping it", entity_id)
+            return None, False
+        if stored is None:
+            return None, True
+        try:
+            option = text_animation_option(int(float(stored.state.state)))
+        except (AttributeError, TypeError, ValueError):
+            return None, True
+        _LOGGER.info("Migrated text animation %s from %s", option, entity_id)
+        return option, True
+
+    def _remove_old_number(self) -> None:
+        """Remove the replaced number entity so it does not linger as unavailable."""
+        entity_id = self._old_number_entity_id()
+        if entity_id is not None:
+            er.async_get(self.hass).async_remove(entity_id)
+            _LOGGER.info("Removed %s, replaced by the Text Animation select", entity_id)
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current animation."""
+        return self._attr_current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Select an animation."""
+        if option not in self._attr_options:
+            _LOGGER.error("Invalid text animation option: %s", option)
+            return
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._trigger_auto_update()
+
+    async def _trigger_auto_update(self) -> None:
+        """Refresh the display if auto-update is on and the panel is in text mode."""
+        try:
+            mode_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "mode_select", "select")
+            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
+            if not mode_state or mode_state.state != "text":
+                return
+            auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
+            auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
+            if auto_update_state and auto_update_state.state == "on":
+                await update_ipixel_display(self.hass, self._name, self._api)
+        except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not trigger auto-update: %s", err)
 
     @property

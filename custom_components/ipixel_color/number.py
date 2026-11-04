@@ -33,7 +33,6 @@ async def async_setup_entry(
         iPIXELFontSize(api, entry, address, name),
         iPIXELLineSpacing(api, entry, address, name),
         iPIXELBrightness(api, entry, address, name),
-        iPIXELTextAnimation(hass, api, entry, address, name),
         iPIXELTextSpeed(hass, api, entry, address, name),
         iPIXELTextRainbow(hass, api, entry, address, name),
     ])
@@ -258,87 +257,6 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
                 _LOGGER.error("Error setting brightness: %s", err)
         else:
             _LOGGER.error("Invalid brightness: %d (must be 1-100)", brightness)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
-
-
-class iPIXELTextAnimation(NumberEntity, RestoreEntity):
-    """Representation of an iPIXEL Color text animation setting."""
-
-    _attr_mode = NumberMode.BOX
-    _attr_native_min_value = 0
-    _attr_native_max_value = 7
-    _attr_native_step = 1
-    _attr_icon = "mdi:animation"
-
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        api: iPIXELAPI,
-        entry: ConfigEntry,
-        address: str,
-        name: str
-    ) -> None:
-        """Initialize the text animation number."""
-        self.hass = hass
-        self._api = api
-        self._entry = entry
-        self._address = address
-        self._name = name
-        self._attr_name = "Text Animation"
-        self._attr_unique_id = f"{address}_text_animation"
-        self._attr_native_value = 0  # Default to no animation
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
-
-    async def async_added_to_hass(self) -> None:
-        """Run when entity about to be added to hass."""
-        await super().async_added_to_hass()
-
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state:
-            try:
-                value = int(float(last_state.state))
-                if 0 <= value <= 7:
-                    self._attr_native_value = value
-            except (ValueError, TypeError):
-                pass
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the current animation value."""
-        return self._attr_native_value
-
-    async def async_set_native_value(self, value: float) -> None:
-        """Set the animation."""
-        self._attr_native_value = int(value)
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in text mode."""
-        try:
-            from .common import update_ipixel_display
-
-            mode_entity_id = f"select.{self._name.lower().replace(' ', '_')}_mode"
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "text":
-                auto_update_entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
 
     @property
     def available(self) -> bool:

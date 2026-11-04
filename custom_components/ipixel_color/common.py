@@ -5,7 +5,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, DEFAULT_MODE
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, DEFAULT_MODE, text_animation_value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -304,9 +304,8 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         _LOGGER.debug("Text mode - text color: #%s", color)
 
         # Animation - need new number entity
-        animation = await _get_entity_setting(hass, device_name, "number", "text_animation", int, api._address)
-        if animation is None:
-            animation = 0  # Default to no animation
+        animation_option = await _get_entity_setting(hass, device_name, "select", "text_animation_select", str, api._address)
+        animation = text_animation_value(animation_option)
 
         # Speed - need new number entity
         speed = await _get_entity_setting(hass, device_name, "number", "text_speed", int, api._address)
