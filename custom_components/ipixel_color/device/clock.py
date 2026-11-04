@@ -82,13 +82,12 @@ def make_time_command(
     if set_time is None:
         raise ImportError("pypixelcolor library is not installed")
 
-    # If any of the time components are None, get the current local time from Home Assistant
+    # Fill only the missing components from Home Assistant's local time
     if hour is None or minute is None or second is None:
-        # Get the current local time using Home Assistant's utility function
         now = dt_util.now()
-        hour = now.hour
-        minute = now.minute
-        second = now.second
+        hour = now.hour if hour is None else hour
+        minute = now.minute if minute is None else minute
+        second = now.second if second is None else second
 
     # Call pypixelcolor's set_time function
     send_plan = set_time(hour=hour, minute=minute, second=second)
