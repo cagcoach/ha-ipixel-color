@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- MCU Version and WiFi Version sensors are disabled by default on new installs. pypixelcolor 0.4.0 does not decode them, so they always showed "unknown". Existing installs keep them until you disable them on the device page.
+
 ## [0.2.1] - 2026-11-04
 
 ### Fixed
