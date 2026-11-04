@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Text Animation is now a dropdown that names each effect ("0 Static", "1 Scroll left", "2 Scroll right", "3 Scroll up", "4 Scroll down", "5 Blink", "6 Fade", "7 Snowflake") instead of a 0-7 number, defaulting to "1 Scroll left" on new installs. The old number entity is removed and its value carried over; automations that set `number.<device>_text_animation` need to use `select.select_option` on the new select.
 - MCU Version and WiFi Version sensors are disabled by default on new installs. pypixelcolor 0.4.0 does not decode them, so they always showed "unknown". Existing installs keep them until you disable them on the device page.
 
 ### Fixed
