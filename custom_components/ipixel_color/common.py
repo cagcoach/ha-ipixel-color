@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
 from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .fonts import get_font_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -272,16 +273,14 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
 
         # Get pypixelcolor text settings (reusing existing entities where possible)
 
-        # Reuse existing font selector - convert TTF filename to full path
+        # Font select holds a filename; find it in any font location (this
+        # integration's fonts/, pypixelcolor's, system fonts). None means
+        # pypixelcolor's built-in Unifont.
         font_name = await _get_entity_setting(hass, device_name, "select", "font_select", str, api._address)
-        if font_name and font_name.endswith(('.ttf', '.otf')):
-            # Custom TTF/OTF font from fonts/ folder
-            from pathlib import Path
-            font_path = Path(__file__).parent / "fonts" / font_name
-            font = str(font_path) if font_path.exists() else "CUSONG"
-        else:
-            # Use pypixelcolor's built-in fonts or default
-            font = "CUSONG"
+        font = None
+        if font_name and font_name.lower().endswith((".ttf", ".otf")):
+            font_path = await hass.async_add_executor_job(get_font_path, font_name)
+            font = str(font_path) if font_path else None
 
         # Get background color from light entity
         bg_color = get_color_from_light_entity(hass, api._address, "background_color", default=None)

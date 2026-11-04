@@ -114,7 +114,10 @@ Temp: {{ states('sensor.temperature') | round(1) }}°C
 
 ## Font Management
 
+- Text mode's built-in font is GNU Unifont (from pypixelcolor, SIL OFL 1.1). It is used when no font is selected.
 - Place `.ttf`/`.otf` files in `fonts/` folder
+- Optional: a `<font>.json` next to a font tunes it per character height (`font_size`, `offset`, `pixel_threshold`, `var_width` under `metrics` keyed by 16/24/32), as the bundled fonts do
+- CUSONG, SIMSUN and VCR OSD Mono are no longer shipped by pypixelcolor for licensing reasons. If you hold a licence for one, drop the `.ttf` into `fonts/`
 - Restart HA to see new fonts in dropdown
 - Recommended: pixel fonts like 5x5.ttf, 7x7.ttf
 

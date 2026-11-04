@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from functools import partial
 from typing import Any, TYPE_CHECKING
 from math import floor
 
@@ -441,7 +442,7 @@ class iPIXELAPI:
         text: str,
         color: str = "ffffff",
         bg_color: str | None = None,
-        font: str = "CUSONG",
+        font: str | None = None,
         animation: int = 0,
         speed: int = 80,
         rainbow_mode: int = 0,
@@ -453,7 +454,7 @@ class iPIXELAPI:
             text: Text to display (supports emojis)
             color: Text color in hex format (e.g., 'ffffff')
             bg_color: Background color in hex format (e.g., '000000'), or None for transparent
-            font: Font name ('CUSONG', 'SIMSUN', 'VCR_OSD_MONO') or file path
+            font: Font file path, or None for pypixelcolor's built-in Unifont
             animation: Animation type (0-7)
             speed: Animation speed (0-100)
             rainbow_mode: Rainbow mode (0-9)
@@ -474,16 +475,20 @@ class iPIXELAPI:
             char_height = floor(font_size / 16) * 16
 
             # Generate text commands using pypixelcolor
-            commands = make_text_command(
-                text=text,
-                color=color,
-                bg_color=bg_color,
-                font=font,
-                animation=animation,
-                speed=speed,
-                rainbow_mode=rainbow_mode,
-                save_slot=0,
-                char_height=char_height
+            # Rendering loads font files and draws glyphs, so keep it off the loop.
+            commands = await self._hass.async_add_executor_job(
+                partial(
+                    make_text_command,
+                    text=text,
+                    color=color,
+                    bg_color=bg_color,
+                    font=font,
+                    animation=animation,
+                    speed=speed,
+                    rainbow_mode=rainbow_mode,
+                    save_slot=0,
+                    char_height=char_height,
+                )
             )
 
             # Send all command frames
@@ -504,7 +509,7 @@ class iPIXELAPI:
                 text,
                 color,
                 bg_color or "none",
-                font,
+                font or "UNIFONT",
                 animation,
                 speed,
                 len(commands)

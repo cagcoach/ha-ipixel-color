@@ -167,6 +167,13 @@ def bluetooth_manager() -> FakeBluetoothManager:
 _bleak = _module("bleak")
 _bleak.exc = _module("bleak.exc", BleakError=BleakError)
 sys.modules["bleak.exc"] = _bleak.exc
+# Names pypixelcolor imports at module level; tests never use them.
+_bleak.BleakClient = type("BleakClient", (), {})
+_bleak.BleakScanner = type("BleakScanner", (), {})
+_bleak.backends = _module("bleak.backends")
+_bleak.backends.device = _module("bleak.backends.device", BLEDevice=type("BLEDevice", (), {}))
+sys.modules["bleak.backends"] = _bleak.backends
+sys.modules["bleak.backends.device"] = _bleak.backends.device
 
 
 class BleakClientWithServiceCache:
