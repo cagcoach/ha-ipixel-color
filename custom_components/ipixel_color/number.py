@@ -12,7 +12,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
+from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, DEFAULT_FONT_SIZE, DEFAULT_TEXT_RAINBOW
 from .common import get_entity_id_by_unique_id
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Font Size"
         self._attr_unique_id = f"{address}_font_size"
-        self._attr_native_value = 0.0  # 0 means auto-sizing
+        self._attr_native_value = DEFAULT_FONT_SIZE  # 0 means auto-sizing
         self._attr_entity_description = "Font size in pixels (0 = auto-sizing, supports decimals)"
         
         # Device info for grouping in device registry
@@ -370,7 +370,7 @@ class iPIXELTextRainbow(NumberEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Text Rainbow"
         self._attr_unique_id = f"{address}_text_rainbow"
-        self._attr_native_value = 0  # Default to no rainbow
+        self._attr_native_value = DEFAULT_TEXT_RAINBOW
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},

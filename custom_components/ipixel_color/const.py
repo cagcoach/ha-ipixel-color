@@ -43,7 +43,13 @@ AVAILABLE_MODES = [
     MODE_CLOCK,
 ]
 
-DEFAULT_MODE = MODE_TEXT_IMAGE
+DEFAULT_MODE = MODE_TEXT
+
+# Defaults for a new install (restored values win after that).
+DEFAULT_FONT = "unifont.otf"  # pypixelcolor 0.5 built-in (GNU Unifont)
+DEFAULT_FONT_SIZE = 16.0
+DEFAULT_TEXT_RAINBOW = 1
+DEFAULT_TEXT = "HomeAssistant!"
 
 # Text-mode animations (pypixelcolor send_text, documented at
 # https://lucagoc.fr/pypixelcolor/main/commands/content/). Shown as

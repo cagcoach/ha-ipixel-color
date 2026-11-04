@@ -23,6 +23,7 @@ from .const import (
     CONF_NAME,
     AVAILABLE_MODES,
     DEFAULT_MODE,
+    DEFAULT_FONT,
     DEFAULT_TEXT_ANIMATION,
     TEXT_ANIMATION_OPTIONS,
     text_animation_option,
@@ -80,7 +81,7 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
 
         # Fonts found in all locations, scanned in the executor at setup
         self._attr_options = fonts
-        self._attr_current_option = "OpenSans-Light.ttf" if "OpenSans-Light.ttf" in self._attr_options else self._attr_options[0]
+        self._attr_current_option = DEFAULT_FONT if DEFAULT_FONT in self._attr_options else self._attr_options[0]
         
         # Device info for grouping in device registry
         self._attr_device_info = DeviceInfo(
