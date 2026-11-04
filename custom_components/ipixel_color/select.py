@@ -341,11 +341,15 @@ class iPIXELTextAnimationSelect(SelectEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in self._attr_options:
             self._attr_current_option = last_state.state
-        else:
-            migrated = self._migrate_from_number()
-            if migrated is not None:
-                self._attr_current_option = migrated
-        self._remove_old_number()
+            self._remove_old_number()
+            return
+        migrated, readable = self._migrate_from_number()
+        if migrated is not None:
+            self._attr_current_option = migrated
+        if readable:
+            # Only drop the old number once its value was read (or it had none),
+            # so a restore-API change can never lose the user's setting.
+            self._remove_old_number()
 
     def _old_number_entity_id(self) -> str | None:
         registry = er.async_get(self.hass)
@@ -353,20 +357,33 @@ class iPIXELTextAnimationSelect(SelectEntity, RestoreEntity):
             "number", DOMAIN, f"{self._address}_text_animation"
         )
 
-    def _migrate_from_number(self) -> str | None:
-        """Return the old number entity's last value as a select option."""
+    def _migrate_from_number(self) -> tuple[str | None, bool]:
+        """Read the old number entity's last value as a select option.
+
+        Returns (option, readable). readable is False when the restore data
+        could not be read, in which case the old entity must be kept.
+        """
         entity_id = self._old_number_entity_id()
         if entity_id is None:
-            return None
+            return None, True
         try:
-            stored = async_get_restore_data(self.hass).last_states.get(entity_id)
-            if stored is None:
-                return None
+            data = async_get_restore_data(self.hass)
+            getter = getattr(data, "async_get_stored_state", None)
+            if getter is not None:
+                stored = getter(entity_id)
+            else:
+                stored = data.last_states.get(entity_id)
+        except Exception:  # noqa: BLE001 - restore internals differ by HA version
+            _LOGGER.warning("Could not read stored state of %s; keeping it", entity_id)
+            return None, False
+        if stored is None:
+            return None, True
+        try:
             option = text_animation_option(int(float(stored.state.state)))
         except (AttributeError, TypeError, ValueError):
-            return None
+            return None, True
         _LOGGER.info("Migrated text animation %s from %s", option, entity_id)
-        return option
+        return option, True
 
     def _remove_old_number(self) -> None:
         """Remove the replaced number entity so it does not linger as unavailable."""
