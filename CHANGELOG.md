@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Text mode has its own **Text Size** dropdown that lists only the sizes the panel can draw (multiples of 16 up to the panel height: just 16 on a 20-row panel, 16 and 32 on a 32-row panel). Before, it used Font Size, which let you pick values like 10 or 20 that rendered the same as 16.
+- Font Size is renamed **Image Font Size** and now applies only to textimage mode, where any size works. Its entity ID is unchanged.
+
 ## [0.2.1] - 2026-11-04
 
 ### Fixed

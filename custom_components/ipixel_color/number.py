@@ -61,7 +61,7 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
         self._entry = entry
         self._address = address
         self._name = name
-        self._attr_name = "Font Size"
+        self._attr_name = "Image Font Size"
         self._attr_unique_id = f"{address}_font_size"
         self._attr_native_value = 0.0  # 0 means auto-sizing
         self._attr_entity_description = "Font size in pixels (0 = auto-sizing, supports decimals)"

@@ -5,7 +5,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, TEXT_SIZE_STEP
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -314,10 +314,10 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             speed = 80  # Default speed
 
         # Font size - need new number entity
-        font_size = await _get_entity_setting(hass, device_name, "number", "font_size", float, api._address)
-        if font_size is None:
-            font_size = 16  # Default font_size
-        font_size = int(font_size)
+        # Text mode has its own size select (multiples of 16 the panel can draw)
+        font_size = await _get_entity_setting(hass, device_name, "select", "text_size_select", int, api._address)
+        if not font_size:
+            font_size = TEXT_SIZE_STEP
 
         # Rainbow mode - need new number entity
         rainbow_mode = await _get_entity_setting(hass, device_name, "number", "text_rainbow", int, api._address)

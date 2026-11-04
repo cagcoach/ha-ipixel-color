@@ -44,3 +44,14 @@ AVAILABLE_MODES = [
 ]
 
 DEFAULT_MODE = MODE_TEXT_IMAGE
+
+# Text mode renders the font only at multiples of 16 rows, up to the panel
+# height (16 and 20 look the same on a 20-row panel).
+TEXT_SIZE_STEP = 16
+
+
+def text_mode_sizes(panel_height: int | None) -> list[int]:
+    """Return the text-mode font sizes a panel of this height can draw."""
+    if not isinstance(panel_height, int) or panel_height < TEXT_SIZE_STEP:
+        return [TEXT_SIZE_STEP]
+    return list(range(TEXT_SIZE_STEP, panel_height // TEXT_SIZE_STEP * TEXT_SIZE_STEP + 1, TEXT_SIZE_STEP))

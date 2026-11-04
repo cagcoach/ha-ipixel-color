@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
-from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE
+from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE, TEXT_SIZE_STEP, text_mode_sizes
 from .common import get_entity_id_by_unique_id
 from .common import update_ipixel_display
 from .fonts import get_available_fonts
@@ -32,11 +32,20 @@ async def async_setup_entry(
     name = entry.data[CONF_NAME]
     
     api = hass.data[DOMAIN][entry.entry_id]
+
+    # Text-mode sizes depend on the panel height; fall back to 16 if the
+    # panel does not answer (the options are rebuilt on the next reload).
+    try:
+        sizes = text_mode_sizes(await api.panel_height())
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Could not read panel height for text sizes: %s", err)
+        sizes = text_mode_sizes(None)
     
     async_add_entities([
         iPIXELFontSelect(hass, api, entry, address, name),
         iPIXELModeSelect(hass, api, entry, address, name),
         iPIXELClockStyleSelect(hass, api, entry, address, name),
+        iPIXELTextSizeSelect(hass, api, entry, address, name, sizes),
     ])
 
 
@@ -277,6 +286,84 @@ class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
                     await update_ipixel_display(self.hass, self._name, self._api)
                     _LOGGER.debug("Auto-update triggered display refresh due to clock style change")
         except Exception as err:
+            _LOGGER.debug("Could not trigger auto-update: %s", err)
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return True
+
+
+class iPIXELTextSizeSelect(SelectEntity, RestoreEntity):
+    """Text-mode font size, limited to the sizes the panel can draw.
+
+    Text mode renders at multiples of 16 rows up to the panel height, so a
+    20-row panel only offers 16 and a 32-row panel offers 16 and 32.
+    """
+
+    _attr_icon = "mdi:format-size"
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: iPIXELAPI,
+        entry: ConfigEntry,
+        address: str,
+        name: str,
+        sizes: list[int],
+    ) -> None:
+        """Initialize the text size select."""
+        self.hass = hass
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Text Size"
+        self._attr_unique_id = f"{address}_text_size_select"
+        self._attr_options = [str(size) for size in sizes]
+        self._attr_current_option = str(TEXT_SIZE_STEP)
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="iPIXEL",
+            model="LED Matrix Display",
+            sw_version="1.0",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last size if the panel still supports it."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in self._attr_options:
+            self._attr_current_option = last_state.state
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current text size."""
+        return self._attr_current_option
+
+    async def async_select_option(self, option: str) -> None:
+        """Select a text size."""
+        if option not in self._attr_options:
+            _LOGGER.error("Invalid text size option: %s", option)
+            return
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._trigger_auto_update()
+
+    async def _trigger_auto_update(self) -> None:
+        """Refresh the display if auto-update is on and the panel is in text mode."""
+        try:
+            mode_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "mode_select", "select")
+            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
+            if not mode_state or mode_state.state != "text":
+                return
+            auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
+            auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
+            if auto_update_state and auto_update_state.state == "on":
+                await update_ipixel_display(self.hass, self._name, self._api)
+        except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Could not trigger auto-update: %s", err)
 
     @property
