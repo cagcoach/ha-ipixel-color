@@ -39,7 +39,7 @@ async def async_setup_entry(
     ])
 
 
-class iPIXELSwitch(SwitchEntity):
+class iPIXELSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color switch."""
 
     def __init__(
@@ -56,7 +56,7 @@ class iPIXELSwitch(SwitchEntity):
         self._name = name
         self._attr_name = name
         self._attr_unique_id = f"{address}_power"
-        self._is_on = False
+        self._is_on = api.power_state
         self._available = True
 
         # Device info for grouping in device registry
@@ -67,6 +67,19 @@ class iPIXELSwitch(SwitchEntity):
             model="LED Matrix Display",
             sw_version="1.0",
         )
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last power state Home Assistant knew.
+
+        The panel cannot report whether it is on, so after a restart the last
+        state set from Home Assistant is the best guess. A fresh install has
+        none and keeps the API default (on).
+        """
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in ("on", "off"):
+            self._api.restore_power_state(last_state.state == "on")
+        self._is_on = self._api.power_state
 
     @property
     def is_on(self) -> bool:
