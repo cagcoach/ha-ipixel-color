@@ -44,9 +44,12 @@ async def async_setup_entry(
     name = entry.data[CONF_NAME]
     
     api = hass.data[DOMAIN][entry.entry_id]
-    
+
+    # Scanning the font folders is file I/O, which must not run in the event loop.
+    fonts = await hass.async_add_executor_job(get_available_fonts)
+
     async_add_entities([
-        iPIXELFontSelect(hass, api, entry, address, name),
+        iPIXELFontSelect(hass, api, entry, address, name, fonts),
         iPIXELModeSelect(hass, api, entry, address, name),
         iPIXELClockStyleSelect(hass, api, entry, address, name),
         iPIXELTextAnimationSelect(hass, api, entry, address, name),
@@ -61,8 +64,9 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         hass: HomeAssistant,
         api: iPIXELAPI, 
         entry: ConfigEntry, 
-        address: str, 
-        name: str
+        address: str,
+        name: str,
+        fonts: list[str],
     ) -> None:
         """Initialize the font select."""
         self.hass = hass
@@ -74,8 +78,8 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_font_select"
         self._attr_entity_description = "Select font for text display"
 
-        # Get available fonts from all locations
-        self._attr_options = get_available_fonts()
+        # Fonts found in all locations, scanned in the executor at setup
+        self._attr_options = fonts
         self._attr_current_option = "OpenSans-Light.ttf" if "OpenSans-Light.ttf" in self._attr_options else self._attr_options[0]
         
         # Device info for grouping in device registry
