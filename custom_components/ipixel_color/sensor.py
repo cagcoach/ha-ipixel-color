@@ -45,7 +45,7 @@ SENSOR_DESCRIPTIONS = [
         name="MCU Version",
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
-        # pypixelcolor 0.4.0 does not decode these; they always read "unknown".
+        # pypixelcolor (0.4 and 0.5) does not decode these; they always read "unknown".
         entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
@@ -53,7 +53,7 @@ SENSOR_DESCRIPTIONS = [
         name="WiFi Version",
         icon="mdi:wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
-        # pypixelcolor 0.4.0 does not decode these; they always read "unknown".
+        # pypixelcolor (0.4 and 0.5) does not decode these; they always read "unknown".
         entity_registry_enabled_default=False,
     ),
 ]
