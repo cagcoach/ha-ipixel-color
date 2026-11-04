@@ -59,7 +59,7 @@ TEXT_ANIMATIONS = {
     7: "Snowflake",
 }
 TEXT_ANIMATION_OPTIONS = [f"{value} {label}" for value, label in TEXT_ANIMATIONS.items()]
-DEFAULT_TEXT_ANIMATION = TEXT_ANIMATION_OPTIONS[0]
+DEFAULT_TEXT_ANIMATION = TEXT_ANIMATION_OPTIONS[1]  # 1 Scroll left
 
 
 def text_animation_value(option: str | None) -> int:
@@ -73,4 +73,4 @@ def text_animation_value(option: str | None) -> int:
 
 def text_animation_option(value: int) -> str:
     """Return the select option for an animation number."""
-    return TEXT_ANIMATION_OPTIONS[value] if value in TEXT_ANIMATIONS else DEFAULT_TEXT_ANIMATION
+    return TEXT_ANIMATION_OPTIONS[value] if value in TEXT_ANIMATIONS else TEXT_ANIMATION_OPTIONS[0]

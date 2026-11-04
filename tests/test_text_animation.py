@@ -25,3 +25,9 @@ def test_bad_values_fall_back_to_static():
     assert text_animation_value("unknown") == 0
     assert text_animation_value("9 Nope") == 0
     assert text_animation_option(42) == "0 Static"
+
+
+def test_new_installs_default_to_scroll_left():
+    from custom_components.ipixel_color.const import DEFAULT_TEXT_ANIMATION
+
+    assert DEFAULT_TEXT_ANIMATION == "1 Scroll left"
