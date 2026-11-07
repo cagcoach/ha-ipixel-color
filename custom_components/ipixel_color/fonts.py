@@ -6,21 +6,37 @@ from pathlib import Path
 
 _LOGGER = logging.getLogger(__name__)
 
+# <config>/fonts, set at setup. It survives HACS updates, which replace this
+# integration's own folder (and its fonts/) wholesale.
+_config_fonts_dir: Path | None = None
+
+
+def set_config_fonts_dir(path: str | Path | None) -> None:
+    """Register Home Assistant's <config>/fonts folder as a font location."""
+    global _config_fonts_dir
+    _config_fonts_dir = Path(path) if path else None
+
 
 def get_font_locations() -> list[Path]:
     """Get list of font directories sorted by priority.
 
     Priority order:
-    1. Custom fonts from this integration's fonts/ folder
-    2. Fonts from pypixelcolor package
-    3. System fonts (Linux standard locations)
+    1. User fonts in Home Assistant's <config>/fonts folder
+    2. Fonts bundled in this integration's fonts/ folder
+    3. Fonts from pypixelcolor package
+    4. System fonts (Linux standard locations)
 
     Returns:
         List of Path objects for font directories that exist
     """
     locations = []
 
-    # 1st priority: Custom fonts from this integration
+    # 1st priority: user fonts in <config>/fonts (persistent across updates)
+    if _config_fonts_dir is not None and _config_fonts_dir.is_dir():
+        locations.append(_config_fonts_dir)
+        _LOGGER.debug("Added config fonts directory: %s", _config_fonts_dir)
+
+    # 2nd priority: fonts bundled with this integration
     custom_fonts_dir = Path(__file__).parent / "fonts"
     if custom_fonts_dir.exists() and custom_fonts_dir.is_dir():
         locations.append(custom_fonts_dir)

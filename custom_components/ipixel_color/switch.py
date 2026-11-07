@@ -18,6 +18,8 @@ from .common import update_ipixel_display
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_COMMANDED = "commanded"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -39,7 +41,7 @@ async def async_setup_entry(
     ])
 
 
-class iPIXELSwitch(SwitchEntity):
+class iPIXELSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color switch."""
 
     def __init__(
@@ -56,7 +58,11 @@ class iPIXELSwitch(SwitchEntity):
         self._name = name
         self._attr_name = name
         self._attr_unique_id = f"{address}_power"
-        self._is_on = False
+        self._is_on = api.power_state
+        # True once the state came from a command sent through Home Assistant
+        # (not the default). Saved as an attribute so a restart only restores
+        # states that were really set, not the old always-off default.
+        self._commanded = False
         self._available = True
 
         # Device info for grouping in device registry
@@ -67,6 +73,30 @@ class iPIXELSwitch(SwitchEntity):
             model="LED Matrix Display",
             sw_version="1.0",
         )
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last power state Home Assistant knew.
+
+        The panel cannot report whether it is on, so after a restart the last
+        state set from Home Assistant is the best guess. A fresh install, or a
+        state saved by an older version that always started off, keeps the
+        API default (on).
+        """
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if (
+            last_state is not None
+            and last_state.state in ("on", "off")
+            and last_state.attributes.get(ATTR_COMMANDED)
+        ):
+            self._api.restore_power_state(last_state.state == "on")
+            self._commanded = True
+        self._is_on = self._api.power_state
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Record whether the state was set through Home Assistant."""
+        return {ATTR_COMMANDED: self._commanded}
 
     @property
     def is_on(self) -> bool:
@@ -83,13 +113,14 @@ class iPIXELSwitch(SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
         try:
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device before turning on")
-                await self._api.connect()
-            
+            if not await self._api.ensure_connected():
+                _LOGGER.error("Cannot turn on: device %s not connected", self._api.address)
+                return
+
             success = await self._api.set_power(True)
             if success:
                 self._is_on = True
+                self._commanded = True
                 _LOGGER.debug("Successfully turned on iPIXEL display")
             else:
                 _LOGGER.error("Failed to turn on iPIXEL display")
@@ -103,13 +134,14 @@ class iPIXELSwitch(SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
         try:
-            if not self._api.is_connected:
-                _LOGGER.debug("Reconnecting to device before turning off")
-                await self._api.connect()
-            
+            if not await self._api.ensure_connected():
+                _LOGGER.error("Cannot turn off: device %s not connected", self._api.address)
+                return
+
             success = await self._api.set_power(False)
             if success:
                 self._is_on = False
+                self._commanded = True
                 _LOGGER.debug("Successfully turned off iPIXEL display")
             else:
                 _LOGGER.error("Failed to turn off iPIXEL display")

@@ -5,7 +5,8 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
-from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
+from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN, DEFAULT_MODE, TEXT_SIZE_STEP, text_animation_value
+from .fonts import get_font_path
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text
         # Get current mode
         mode = await _get_entity_setting(hass, device_name, "select", "mode_select", str, api._address)
         if not mode:
-            mode = MODE_TEXT_IMAGE  # Default to textimage mode
+            mode = DEFAULT_MODE
 
         _LOGGER.debug("Updating display in mode: %s", mode)
 
@@ -171,10 +172,10 @@ async def _update_textimage_mode(hass: HomeAssistant, device_name: str, api, tex
         bg_color = get_color_from_light_entity(hass, api._address, "background_color", default="000000")
         _LOGGER.debug("Background color: #%s", bg_color)
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for display update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot update display: device %s not connected", api.address)
+            return False
 
         # Resolve templates and process escape sequences
         template_resolved = await resolve_template_variables(hass, text)
@@ -222,10 +223,10 @@ async def _update_clock_mode(hass: HomeAssistant, device_name: str, api) -> bool
         if show_date is None:
             show_date = True  # Default to showing date
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for clock mode update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot update clock: device %s not connected", api.address)
+            return False
 
         # Send clock mode command
         success = await api.set_clock_mode(
@@ -272,16 +273,14 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
 
         # Get pypixelcolor text settings (reusing existing entities where possible)
 
-        # Reuse existing font selector - convert TTF filename to full path
+        # Font select holds a filename; find it in any font location (this
+        # integration's fonts/, pypixelcolor's, system fonts). None means
+        # pypixelcolor's built-in Unifont.
         font_name = await _get_entity_setting(hass, device_name, "select", "font_select", str, api._address)
-        if font_name and font_name.endswith(('.ttf', '.otf')):
-            # Custom TTF/OTF font from fonts/ folder
-            from pathlib import Path
-            font_path = Path(__file__).parent / "fonts" / font_name
-            font = str(font_path) if font_path.exists() else "CUSONG"
-        else:
-            # Use pypixelcolor's built-in fonts or default
-            font = "CUSONG"
+        font = None
+        if font_name and font_name.lower().endswith((".ttf", ".otf")):
+            font_path = await hass.async_add_executor_job(get_font_path, font_name)
+            font = str(font_path) if font_path else None
 
         # Get background color from light entity
         bg_color = get_color_from_light_entity(hass, api._address, "background_color", default=None)
@@ -304,24 +303,29 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         _LOGGER.debug("Text mode - text color: #%s", color)
 
         # Animation - need new number entity
-        animation = await _get_entity_setting(hass, device_name, "number", "text_animation", int, api._address)
-        if animation is None:
-            animation = 0  # Default to no animation
+        animation_option = await _get_entity_setting(hass, device_name, "select", "text_animation_select", str, api._address)
+        animation = text_animation_value(animation_option)
 
         # Speed - need new number entity
         speed = await _get_entity_setting(hass, device_name, "number", "text_speed", int, api._address)
         if speed is None:
             speed = 80  # Default speed
 
+        # Font size - need new number entity
+        # Text mode has its own size select (multiples of 16 the panel can draw)
+        font_size = await _get_entity_setting(hass, device_name, "select", "text_size_select", int, api._address)
+        if not font_size:
+            font_size = TEXT_SIZE_STEP
+
         # Rainbow mode - need new number entity
         rainbow_mode = await _get_entity_setting(hass, device_name, "number", "text_rainbow", int, api._address)
         if rainbow_mode is None:
             rainbow_mode = 0  # Default to no rainbow
 
-        # Connect if needed
-        if not api.is_connected:
-            _LOGGER.debug("Reconnecting to device for text mode update")
-            await api.connect()
+        # Connect if needed (reconnect-aware)
+        if not await api.ensure_connected():
+            _LOGGER.warning("Cannot send text: device %s not connected", api.address)
+            return False
 
         # Resolve templates and process escape sequences
         template_resolved = await resolve_template_variables(hass, text)
@@ -335,7 +339,8 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
             font=font,
             animation=animation,
             speed=speed,
-            rainbow_mode=rainbow_mode
+            rainbow_mode=rainbow_mode,
+            font_size=font_size
         )
 
         if success:

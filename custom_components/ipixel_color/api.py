@@ -3,10 +3,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections.abc import Callable
+from functools import partial
 from typing import Any, TYPE_CHECKING
+from math import floor
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
+
+from homeassistant.components import bluetooth
 
 from .bluetooth.client import BluetoothClient
 from .device.commands import (
@@ -18,64 +25,242 @@ from .device.text import make_text_command
 from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
-from .exceptions import iPIXELConnectionError
+from .exceptions import iPIXELConnectionError, iPIXELError
+from .const import OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT
 
 _LOGGER = logging.getLogger(__name__)
+
+# Reconnect backoff schedule: first attempt after 5s, then 10s, capped at 30s.
+RECONNECT_BACKOFF_START = 5.0
+RECONNECT_BACKOFF_MAX = 30.0
 
 
 class iPIXELAPI:
     """iPIXEL Color device API client - simplified facade."""
 
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        address: str,
+        entry: "ConfigEntry | None" = None,
+    ) -> None:
         """Initialize the API client.
 
         Args:
             hass: Home Assistant instance
             address: Bluetooth MAC address
+            entry: Config entry holding integration options (dimension overrides, etc.)
         """
+        self._hass = hass
         self._address = address
+        self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
-        self._power_state = False
+        self._bluetooth.on_disconnect = self._on_disconnect
+        # The panel has no power-state query. It is on whenever it has power
+        # and accepts a connection, so start from on; the power switch
+        # restores the last state it set when Home Assistant restarts.
+        self._power_state = True
         self._device_info: dict[str, Any] | None = None
-        self._device_response: bytes | None = None
-        
+        self._device_info_fallback: dict[str, Any] | None = None
+        self._fallback_connection_id: int | None = None
+        # Serializes reconnect attempts and guards the watcher bookkeeping.
+        self._reconnect_lock = asyncio.Lock()
+        self._reconnect_task: asyncio.Task | None = None
+        # Set by a fresh advertisement to cut a running backoff short.
+        self._reconnect_wakeup = asyncio.Event()
+        self._last_reconnect_attempt = 0.0
+        self._unsubscribe_bluetooth: Callable | None = None
+        self._watcher_started = False
+
+    def _resolved_dimensions(self, base_info: dict[str, Any]) -> tuple[int, int]:
+        """Return (width, height) honoring options-flow overrides if set."""
+        if self._entry is None:
+            return base_info["width"], base_info["height"]
+        options = self._entry.options
+        if not options.get(OPT_OVERRIDE_DIMENSIONS):
+            return base_info["width"], base_info["height"]
+        width = options.get(OPT_PANEL_WIDTH) or base_info["width"]
+        height = options.get(OPT_PANEL_HEIGHT) or base_info["height"]
+        return width, height
+
+    # ------------------------------------------------------------------ lifecycle
+
     async def connect(self) -> bool:
         """Connect to the iPIXEL device."""
         return await self._bluetooth.connect(self._notification_handler)
-    
+
     async def disconnect(self) -> None:
-        """Disconnect from the device."""
+        """Disconnect from the device and stop the reconnect watcher."""
+        await self.stop_watcher()
         await self._bluetooth.disconnect()
-    
+
+    async def ensure_connected(self) -> bool:
+        """Ensure the device link is up, reconnecting if it dropped.
+
+        Reconnect-aware entry point used by entity action paths. Never
+        raises; returns True when the device is (or just became) connected.
+        """
+        return await self._bluetooth.ensure_connected()
+
+    # ------------------------------------------------------------- reconnect logic
+
+    def _on_disconnect(self) -> None:
+        """Handle an unexpected link drop (called synchronously by the client).
+
+        Schedules a background reconnect with backoff so the panel recovers
+        without a manual integration reload. The watcher also subscribes to
+        HA Bluetooth advertisements so a reappearing device is picked up
+        immediately instead of waiting for the next poll.
+        """
+        if not self._watcher_started:
+            return
+        # The disconnect callback may fire from a non-event-loop thread
+        # (bleak's own thread); hop back to the loop before scheduling.
+        self._hass.loop.call_soon_threadsafe(self._schedule_reconnect)
+
+    def _schedule_reconnect(self) -> None:
+        """Schedule a reconnect loop, unless one is already running."""
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            return
+        self._reconnect_task = self._hass.async_create_task(self._reconnect_loop())
+
+    async def _reconnect_loop(self) -> None:
+        """Reconnect with backoff until the link is up again."""
+        try:
+            async with self._reconnect_lock:
+                if self.is_connected:
+                    return
+                delay = RECONNECT_BACKOFF_START
+                _LOGGER.warning(
+                    "iPIXEL device %s link lost; reconnecting (backoff %.0fs)",
+                    self._address,
+                    delay,
+                )
+                while not self.is_connected:
+                    self._reconnect_wakeup.clear()
+                    try:
+                        await asyncio.wait_for(
+                            self._reconnect_wakeup.wait(), timeout=delay
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+                    if not self._watcher_started:
+                        return
+                    self._last_reconnect_attempt = time.monotonic()
+                    if await self.ensure_connected():
+                        _LOGGER.info("Reconnected to iPIXEL device %s", self._address)
+                        return
+                    delay = min(delay * 2, RECONNECT_BACKOFF_MAX)
+                    _LOGGER.warning(
+                        "Reconnect attempt for %s failed; next in %.0fs",
+                        self._address,
+                        delay,
+                    )
+        finally:
+            if (
+                self._reconnect_task is not None
+                and self._reconnect_task is asyncio.current_task()
+            ):
+                self._reconnect_task = None
+
+    async def start_watcher(self) -> None:
+        """Start the reconnect watcher (bluetooth advertisement subscription).
+
+        Called once from async_setup_entry after the initial connection.
+        Idempotent; safe to call more than once (e.g. after reconnects).
+        """
+        if self._watcher_started:
+            return
+        self._watcher_started = True
+
+        def _advertisement_callback(
+            service_info: bluetooth.BluetoothServiceInfoBleak,
+            change: bluetooth.BluetoothChange,
+        ) -> None:
+            # The panel is advertising again; if we are not connected, bring
+            # the link back immediately instead of waiting for the backoff.
+            if self.is_connected:
+                return
+            if self._reconnect_task is not None and not self._reconnect_task.done():
+                # A backoff is running: retry now, but no more often than the
+                # shortest backoff, since advertisements arrive every second.
+                if (
+                    time.monotonic() - self._last_reconnect_attempt
+                    >= RECONNECT_BACKOFF_START
+                ):
+                    self._reconnect_wakeup.set()
+                return
+            self._schedule_reconnect()
+
+        self._unsubscribe_bluetooth = bluetooth.async_register_callback(
+            self._hass,
+            _advertisement_callback,
+            {"address": self._address},
+            bluetooth.BluetoothScanningMode.ACTIVE,
+        )
+
+    async def stop_watcher(self) -> None:
+        """Stop the reconnect watcher and cancel any pending reconnect task."""
+        self._watcher_started = False
+        if self._unsubscribe_bluetooth is not None:
+            try:
+                self._unsubscribe_bluetooth()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Error unsubscribing bluetooth callback: %s", err)
+            self._unsubscribe_bluetooth = None
+        if self._reconnect_task is not None:
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+            self._reconnect_task = None
+
+    async def _send_with_reconnect(self, command: bytes) -> bool:
+        """Send a command, reconnecting once on a stale connection.
+
+        The first attempt may hit a connection that died between the
+        availability check and the write; when that happens, reconnect and
+        retry the command once instead of failing the entity action.
+        """
+        try:
+            return await self._bluetooth.send_command(command)
+        except iPIXELConnectionError:
+            if await self.ensure_connected():
+                return await self._bluetooth.send_command(command)
+            return False
+
+    # ------------------------------------------------------------------ commands
+
     async def set_power(self, on: bool) -> bool:
         """Set device power state."""
         command = make_power_command(on)
-        success = await self._bluetooth.send_command(command)
-        
+        success = await self._send_with_reconnect(command)
+
         if success:
             self._power_state = on
             _LOGGER.debug("Power set to %s", "ON" if on else "OFF")
         return success
-    
+
     async def set_brightness(self, brightness: int) -> bool:
         """Set device brightness level.
-        
+
         Args:
             brightness: Brightness level from 1 to 100
-            
+
         Returns:
             True if command was sent successfully
         """
         try:
             command = make_brightness_command(brightness)
-            success = await self._bluetooth.send_command(command)
-            
+            success = await self._send_with_reconnect(command)
+
             if success:
                 _LOGGER.debug("Brightness set to %d", brightness)
             else:
                 _LOGGER.error("Failed to set brightness to %d", brightness)
             return success
-            
+
         except ValueError as err:
             _LOGGER.error("Invalid brightness value: %s", err)
             return False
@@ -94,7 +279,7 @@ class iPIXELAPI:
         """
         try:
             time_command = make_time_command()
-            success = await self._bluetooth.send_command(time_command)
+            success = await self._send_with_reconnect(time_command)
 
             if success:
                 _LOGGER.debug("Time synchronized to device")
@@ -127,7 +312,7 @@ class iPIXELAPI:
         try:
             # Set clock mode
             command = make_clock_mode_command(style, date, show_date, format_24)
-            success = await self._bluetooth.send_command(command)
+            success = await self._send_with_reconnect(command)
 
             if not success:
                 _LOGGER.error("Failed to set clock mode")
@@ -149,54 +334,49 @@ class iPIXELAPI:
         except Exception as err:
             _LOGGER.error("Error setting clock mode: %s", err)
             return False
-    
+
+    async def panel_height(self) -> int | None:
+        """Return the panel height, honoring the options-flow override."""
+        info = await self.get_device_info()
+        if not info:
+            return None
+        return self._resolved_dimensions(info)[1]
+
     async def get_device_info(self) -> dict[str, Any] | None:
-        """Query device information and store it."""
+        """Query device information and store it.
+
+        If the panel does not answer, default values (64x16) are returned
+        but not kept, so the query is retried after the next reconnect
+        instead of the wrong size sticking until Home Assistant restarts.
+        """
         if self._device_info is not None:
             return self._device_info
-            
+        if self._device_info_fallback is not None and self._fallback_connection_id == (
+            self._bluetooth.connection_count
+        ):
+            return self._device_info_fallback
+        if not await self.ensure_connected():
+            _LOGGER.warning("Cannot read device info: %s not connected", self._address)
+            return None
+
         try:
-            command = build_device_info_command()
-            
-            # Set up notification response
-            self._device_response = None
-            response_received = asyncio.Event()
-            
-            def response_handler(sender: Any, data: bytearray) -> None:
-                self._device_response = bytes(data)
-                response_received.set()
-            
-            # Enable notifications temporarily
-            await self._bluetooth._client.start_notify(
-                "0000fa03-0000-1000-8000-00805f9b34fb", response_handler
+            response = await self._bluetooth.request(
+                build_device_info_command(), timeout=5.0
             )
-            
-            try:
-                # Send command
-                await self._bluetooth._client.write_gatt_char(
-                    "0000fa02-0000-1000-8000-00805f9b34fb", command
-                )
-                
-                # Wait for response (5 second timeout)
-                await asyncio.wait_for(response_received.wait(), timeout=5.0)
-                
-                if self._device_response:
-                    self._device_info = parse_device_response(self._device_response)
-                else:
-                    raise Exception("No response received")
-                    
-            finally:
-                await self._bluetooth._client.stop_notify(
-                    "0000fa03-0000-1000-8000-00805f9b34fb"
-                )
-            
+            if not response:
+                raise iPIXELError("No response received")
+            self._device_info = parse_device_response(response)
+            self._device_info_fallback = None
             _LOGGER.info("Device info retrieved: %s", self._device_info)
             return self._device_info
-            
+
         except Exception as err:
-            _LOGGER.error("Failed to get device info: %s", err)
-            # Return default values
-            self._device_info = {
+            _LOGGER.error(
+                "Failed to get device info from %s, using 64x16 defaults: %s",
+                self._address,
+                err,
+            )
+            self._device_info_fallback = {
                 "width": 64,
                 "height": 16,
                 "device_type": 0,
@@ -207,8 +387,10 @@ class iPIXELAPI:
                 "has_wifi": False,
                 "password_flag": 255
             }
-            return self._device_info
-    
+            # Only reuse the defaults for this connection; retry after a reconnect.
+            self._fallback_connection_id = self._bluetooth.connection_count
+            return self._device_info_fallback
+
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bool:
         """Display text as image using PIL and pypixelcolor with color gradient mapping.
 
@@ -222,10 +404,10 @@ class iPIXELAPI:
             bg_color: Background color in hex format (e.g., '000000')
         """
         try:
-            # Get device dimensions
-            device_info = await self.get_device_info()
-            width = device_info["width"]
-            height = device_info["height"]
+            # Get device dimensions (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            width, height = self._resolved_dimensions(base_info)
+            device_info = {**base_info, "width": width, "height": height}
 
             # Render text to PNG with color gradient
             png_data = render_text_to_png(text, width, height, antialias, font_size, font, line_spacing, text_color, bg_color)
@@ -246,7 +428,7 @@ class iPIXELAPI:
                     len(commands),
                     len(command)
                 )
-                success = await self._bluetooth.send_command(command)
+                success = await self._send_with_reconnect(command)
                 if not success:
                     _LOGGER.error("Failed to send image frame %d/%d", i + 1, len(commands))
                     return False
@@ -270,10 +452,11 @@ class iPIXELAPI:
         text: str,
         color: str = "ffffff",
         bg_color: str | None = None,
-        font: str = "CUSONG",
+        font: str | None = None,
         animation: int = 0,
         speed: int = 80,
-        rainbow_mode: int = 0
+        rainbow_mode: int = 0,
+        font_size: int = 16
     ) -> bool:
         """Display text using pypixelcolor.
 
@@ -281,30 +464,41 @@ class iPIXELAPI:
             text: Text to display (supports emojis)
             color: Text color in hex format (e.g., 'ffffff')
             bg_color: Background color in hex format (e.g., '000000'), or None for transparent
-            font: Font name ('CUSONG', 'SIMSUN', 'VCR_OSD_MONO') or file path
+            font: Font file path, or None for pypixelcolor's built-in Unifont
             animation: Animation type (0-7)
             speed: Animation speed (0-100)
             rainbow_mode: Rainbow mode (0-9)
+            font_size: Font size (16, 32, 48, 64) defaults to 16
 
         Returns:
             True if text was sent successfully
         """
         try:
-            # Get device info for height
-            device_info = await self.get_device_info()
-            device_height = device_info["height"]
+            # Get device info for height (honors options-flow override if set)
+            base_info = await self.get_device_info()
+            _, device_height = self._resolved_dimensions(base_info)
+
+            if font_size > device_height:
+                font_size = device_height
+            if font_size < 16:
+                font_size = 16
+            char_height = floor(font_size / 16) * 16
 
             # Generate text commands using pypixelcolor
-            commands = make_text_command(
-                text=text,
-                color=color,
-                bg_color=bg_color,
-                font=font,
-                animation=animation,
-                speed=speed,
-                rainbow_mode=rainbow_mode,
-                save_slot=0,
-                device_height=device_height
+            # Rendering loads font files and draws glyphs, so keep it off the loop.
+            commands = await self._hass.async_add_executor_job(
+                partial(
+                    make_text_command,
+                    text=text,
+                    color=color,
+                    bg_color=bg_color,
+                    font=font,
+                    animation=animation,
+                    speed=speed,
+                    rainbow_mode=rainbow_mode,
+                    save_slot=0,
+                    char_height=char_height,
+                )
             )
 
             # Send all command frames
@@ -315,7 +509,7 @@ class iPIXELAPI:
                     len(commands),
                     len(command)
                 )
-                success = await self._bluetooth.send_command(command)
+                success = await self._send_with_reconnect(command)
                 if not success:
                     _LOGGER.error("Failed to send text frame %d/%d", i + 1, len(commands))
                     return False
@@ -325,7 +519,7 @@ class iPIXELAPI:
                 text,
                 color,
                 bg_color or "none",
-                font,
+                font or "UNIFONT",
                 animation,
                 speed,
                 len(commands)
@@ -339,17 +533,21 @@ class iPIXELAPI:
     def _notification_handler(self, sender: Any, data: bytearray) -> None:
         """Handle notifications from the device."""
         _LOGGER.debug("Notification from %s: %s", sender, data.hex())
-    
+
     @property
     def is_connected(self) -> bool:
         """Return True if connected to device."""
         return self._bluetooth.is_connected
-    
+
     @property
     def power_state(self) -> bool:
         """Return current power state."""
         return self._power_state
-    
+
+    def restore_power_state(self, on: bool) -> None:
+        """Seed the cached power state from Home Assistant's last known state."""
+        self._power_state = on
+
     @property
     def address(self) -> str:
         """Return device address."""

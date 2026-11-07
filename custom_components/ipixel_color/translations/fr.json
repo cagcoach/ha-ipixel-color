@@ -1,0 +1,15 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options iPIXEL Color",
+        "description": "Certains panneaux (ex : le B.K. Light 32x32 vendu chez Action) annoncent de mauvaises dimensions par Bluetooth. Active l'override et indique les dimensions physiques réelles si l'affichage est incorrect.",
+        "data": {
+          "override_dimensions": "Forcer les dimensions du panneau",
+          "panel_width": "Largeur du panneau (pixels, 0 = valeur du firmware)",
+          "panel_height": "Hauteur du panneau (pixels, 0 = valeur du firmware)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "OpenSans-Light",
+  "metrics": {
+    "16": {
+      "font_size": 14,
+      "offset": [0, -3],
+      "pixel_threshold": 50,
+      "var_width": true 
+    },
+    "24": {
+      "font_size": 24,
+      "offset": [0, -1],
+      "pixel_threshold": 80,
+      "var_width": true
+    },
+    "32": {
+      "font_size": 25,
+      "offset": [0, 2],
+      "pixel_threshold": 85,
+      "var_width": true
+    }
+  }
+}
